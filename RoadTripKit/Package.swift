@@ -24,7 +24,7 @@ let package = Package(
         // therefore unit-testable with synthetic data via RTPProviders' MapProvider protocol.
         .target(
             name: "RTPRouting",
-            dependencies: ["RTPCore"]
+            dependencies: ["RTPCore", "RTPProviders"]
         ),
 
         // RTPProviders: MapProvider protocol + AppleMapsProvider (MapKit-backed) + StubProvider.

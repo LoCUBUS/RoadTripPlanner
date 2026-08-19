@@ -13,6 +13,15 @@ public final class StubMapProvider: MapProvider, @unchecked Sendable {
     /// Used when no specific route was scripted for a from/to pair.
     public var defaultRoute: RouteResult?
 
+    /// When > 0, `directions(from:to:)` throws `.requestFailed` and
+    /// decrements this counter instead of returning a route — lets tests
+    /// script transient failures to exercise retry/backoff/fallback logic
+    /// (e.g. in `RouteCoordinator`).
+    public var directionsFailuresRemaining: Int = 0
+    /// Total number of `directions(from:to:)` calls observed, so tests can
+    /// assert on cache hits vs. re-requests.
+    public private(set) var directionsCallCount: Int = 0
+
     public init() {}
 
     public static func routeKey(from: Coordinate, to: Coordinate) -> String {
@@ -36,6 +45,11 @@ public final class StubMapProvider: MapProvider, @unchecked Sendable {
     }
 
     public func directions(from: Coordinate, to: Coordinate) async throws -> RouteResult {
+        directionsCallCount += 1
+        if directionsFailuresRemaining > 0 {
+            directionsFailuresRemaining -= 1
+            throw MapProviderError.requestFailed("stubbed failure")
+        }
         if let scripted = routesByKey[Self.routeKey(from: from, to: to)] {
             return scripted
         }
