@@ -37,6 +37,7 @@ enum RouteRecalculator {
             leg.distanceMeters = result.route.distanceMeters
             leg.expectedTravelTime = result.route.expectedTravelTime
             leg.polylineCoordinates = result.route.polyline
+            leg.steps = result.route.steps.map { RouteLegStep(distanceMeters: $0.distanceMeters, endCoordinate: $0.endCoordinate) }
             leg.computedAt = result.computedAt
             leg.isStale = result.isStale
             leg.trip = trip

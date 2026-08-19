@@ -12,6 +12,7 @@ public struct MapCanvasAnnotation: Identifiable, Equatable, Sendable {
         case poi
         case lodging
         case searchResult
+        case timeUp
     }
 
     public var id: UUID
@@ -51,6 +52,7 @@ public extension MapCanvasAnnotation.Style {
         case .poi: "star.circle.fill"
         case .lodging: "bed.double.circle.fill"
         case .searchResult: "magnifyingglass.circle.fill"
+        case .timeUp: "clock.badge.exclamationmark.fill"
         }
     }
 }

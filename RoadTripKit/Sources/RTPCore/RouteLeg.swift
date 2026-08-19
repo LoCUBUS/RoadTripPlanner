@@ -18,6 +18,11 @@ public final class RouteLeg {
     /// Encoded polyline coordinates so the leg renders even offline.
     public var encodedPolyline: Data = Data()
 
+    /// Encoded per-step distances, used only to interpolate the Phase 3
+    /// time-up point at step granularity (docs/CONCEPT.md §2.6) — MKRoute
+    /// exposes no per-step duration, only per-step distance.
+    public var encodedSteps: Data = Data()
+
     public var computedAt: Date = Date.distantPast
 
     /// True until a successful directions request replaces the straight-line
@@ -33,6 +38,7 @@ public final class RouteLeg {
         distanceMeters: Double = 0,
         expectedTravelTime: TimeInterval = 0,
         encodedPolyline: Data = Data(),
+        encodedSteps: Data = Data(),
         computedAt: Date = .distantPast,
         isStale: Bool = true
     ) {
@@ -42,6 +48,7 @@ public final class RouteLeg {
         self.distanceMeters = distanceMeters
         self.expectedTravelTime = expectedTravelTime
         self.encodedPolyline = encodedPolyline
+        self.encodedSteps = encodedSteps
         self.computedAt = computedAt
         self.isStale = isStale
     }
@@ -57,5 +64,31 @@ public final class RouteLeg {
         set {
             encodedPolyline = (try? JSONEncoder().encode(newValue)) ?? Data()
         }
+    }
+
+    /// Convenience accessor decoding/encoding `encodedSteps` as a plain
+    /// `[RouteLegStep]`.
+    public var steps: [RouteLegStep] {
+        get {
+            (try? JSONDecoder().decode([RouteLegStep].self, from: encodedSteps)) ?? []
+        }
+        set {
+            encodedSteps = (try? JSONEncoder().encode(newValue)) ?? Data()
+        }
+    }
+}
+
+/// A framework-independent stand-in for `MKRoute.Step`: just enough to
+/// distribute a leg's travel time along its length by distance share
+/// (docs/CONCEPT.md §2.6). `RTPProviders.RouteStep` is the provider-facing
+/// equivalent; keeping a separate type here means `RTPCore` doesn't need to
+/// depend on `RTPProviders`.
+public struct RouteLegStep: Codable, Sendable, Equatable {
+    public var distanceMeters: Double
+    public var endCoordinate: Coordinate
+
+    public init(distanceMeters: Double, endCoordinate: Coordinate) {
+        self.distanceMeters = distanceMeters
+        self.endCoordinate = endCoordinate
     }
 }
