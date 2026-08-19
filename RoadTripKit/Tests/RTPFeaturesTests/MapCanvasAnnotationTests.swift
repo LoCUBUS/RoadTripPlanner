@@ -26,9 +26,17 @@ struct MapCanvasAnnotationTests {
 
     @Test("Every style has a distinct, non-empty SF Symbol")
     func stylesHaveDistinctSymbols() {
-        let styles: [MapCanvasAnnotation.Style] = [.start, .destination, .waypoint, .poi, .lodging, .searchResult]
+        let styles: [MapCanvasAnnotation.Style] = [.start, .destination, .waypoint, .poi, .lodging, .searchResult, .timeUp, .photo]
         let symbols = styles.map(\.systemImage)
         #expect(symbols.allSatisfy { !$0.isEmpty })
         #expect(Set(symbols).count == symbols.count)
+    }
+
+    @Test("Every style has a distinct, non-empty accessibility description")
+    func stylesHaveDistinctAccessibilityDescriptions() {
+        let styles: [MapCanvasAnnotation.Style] = [.start, .destination, .waypoint, .poi, .lodging, .searchResult, .timeUp, .photo]
+        let descriptions = styles.map(\.accessibilityDescription)
+        #expect(descriptions.allSatisfy { !$0.isEmpty })
+        #expect(Set(descriptions).count == descriptions.count)
     }
 }

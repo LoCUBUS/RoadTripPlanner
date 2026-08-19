@@ -89,6 +89,7 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         MACOSX_DEPLOYMENT_TARGET: "26.0"
         CODE_SIGN_ENTITLEMENTS: App/RoadTripPlanner-macOS.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
 schemes:
   RoadTripPlanner-iOS:

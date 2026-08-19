@@ -57,4 +57,20 @@ public extension MapCanvasAnnotation.Style {
         case .photo: "photo.circle.fill"
         }
     }
+
+    /// A VoiceOver-friendly description of this annotation kind, combined
+    /// with the pin's title to form the full accessibility label
+    /// (docs/CONCEPT.md §1.6 "Accessibility").
+    var accessibilityDescription: String {
+        switch self {
+        case .start: "Start"
+        case .destination: "Destination"
+        case .waypoint: "Waypoint"
+        case .poi: "Point of interest"
+        case .lodging: "Lodging"
+        case .searchResult: "Search result"
+        case .timeUp: "Time-up point"
+        case .photo: "Photo"
+        }
+    }
 }

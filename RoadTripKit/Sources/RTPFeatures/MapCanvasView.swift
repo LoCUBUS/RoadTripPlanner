@@ -62,6 +62,7 @@ public struct MapCanvasView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
                 TextField("Search for a place", text: $searchText)
                     .textFieldStyle(.plain)
                     .onChange(of: searchText) { _, newValue in
@@ -76,6 +77,7 @@ public struct MapCanvasView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(8)
@@ -129,6 +131,7 @@ public struct MapCanvasView: View {
                                 .font(.title2)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("\(annotation.style.accessibilityDescription): \(annotation.title)")
                     }
                 }
 

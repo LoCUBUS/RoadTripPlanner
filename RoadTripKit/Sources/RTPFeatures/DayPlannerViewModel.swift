@@ -20,6 +20,10 @@ public final class DayPlannerViewModel {
     public private(set) var recalculationError: String?
     public private(set) var isSearchingLodging = false
     public private(set) var lodgingResults: [PlaceResult] = []
+    public private(set) var lodgingSearchError: String?
+    /// True once a lodging search has completed at least once, so the view
+    /// can distinguish "haven't searched yet" from "searched, found nothing".
+    public private(set) var hasSearchedLodging = false
 
     /// The most recent `segmentDay` outcome for the currently open day, kept
     /// so the view can render the time-up marker, the dwell-overrun
@@ -104,6 +108,7 @@ public final class DayPlannerViewModel {
     /// switched off.
     public func searchLodging(near coordinate: Coordinate, radiusMeters: Double) async {
         isSearchingLodging = true
+        lodgingSearchError = nil
         defer { isSearchingLodging = false }
 
         let categories: [POICategory] = lodgingCategoryFilterEnabled
@@ -114,7 +119,9 @@ public final class DayPlannerViewModel {
             lodgingResults = try await mapProvider.search(categories: categories, near: coordinate, radiusMeters: radiusMeters)
         } catch {
             lodgingResults = []
+            lodgingSearchError = "Couldn't search for lodging. Check your connection and try again."
         }
+        hasSearchedLodging = true
     }
 
     /// Closes `day` with the chosen lodging, inserted right after

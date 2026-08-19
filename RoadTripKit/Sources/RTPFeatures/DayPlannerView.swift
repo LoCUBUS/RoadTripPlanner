@@ -153,6 +153,15 @@ public struct DayPlannerView: View {
             }
             .disabled(day.timeUpPoint == nil || viewModel.isSearchingLodging)
 
+            if let error = viewModel.lodgingSearchError {
+                Label(error, systemImage: "wifi.exclamationmark")
+                    .foregroundStyle(.orange)
+            } else if viewModel.hasSearchedLodging && viewModel.lodgingResults.isEmpty && !viewModel.isSearchingLodging {
+                Text("No lodging found nearby. Try widening the search radius or long-press the map to drop a pin.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             ForEach(viewModel.lodgingResults) { result in
                 Button {
                     guard let afterID = viewModel.lodgingInsertionAnchorID(for: day) else { return }

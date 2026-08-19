@@ -93,6 +93,22 @@ struct DayPlannerViewModelTests {
         await viewModel.searchLodging(near: nearPoint, radiusMeters: 15_000)
 
         #expect(viewModel.lodgingResults.map(\.title) == ["Hotel Nearby"])
+        #expect(viewModel.hasSearchedLodging)
+        #expect(viewModel.lodgingSearchError == nil)
+    }
+
+    @Test("A failing lodging search surfaces an error message instead of silently returning nothing")
+    func lodgingSearchFailureSurfacesError() async {
+        let provider = StubMapProvider()
+        let trip = await corridorTrip(provider: provider)
+        provider.categorySearchShouldThrow = true
+        let viewModel = DayPlannerViewModel(trip: trip, routeCoordinator: RouteCoordinator(provider: provider, configuration: fastConfiguration()), mapProvider: provider)
+
+        await viewModel.searchLodging(near: Coordinate(latitude: 49.0, longitude: 11.6), radiusMeters: 15_000)
+
+        #expect(viewModel.lodgingResults.isEmpty)
+        #expect(viewModel.lodgingSearchError != nil)
+        #expect(viewModel.hasSearchedLodging)
     }
 
     @Test("Dwell overrun overshoot resolution re-segments past the overrun anchor")

@@ -21,6 +21,9 @@ public final class StubMapProvider: MapProvider, @unchecked Sendable {
     /// Total number of `directions(from:to:)` calls observed, so tests can
     /// assert on cache hits vs. re-requests.
     public private(set) var directionsCallCount: Int = 0
+    /// When true, `search(categories:near:radius:)` throws `.requestFailed`,
+    /// letting tests script a lodging-search failure (e.g. offline).
+    public var categorySearchShouldThrow = false
 
     public init() {}
 
@@ -33,7 +36,10 @@ public final class StubMapProvider: MapProvider, @unchecked Sendable {
     }
 
     public func search(categories: [POICategory], near coordinate: Coordinate, radiusMeters: Double) async throws -> [PlaceResult] {
-        categorySearchResults.filter { result in
+        if categorySearchShouldThrow {
+            throw MapProviderError.requestFailed("stubbed failure")
+        }
+        return categorySearchResults.filter { result in
             guard let category = result.category else { return false }
             return categories.contains(category) && coordinate.distance(to: result.coordinate) <= radiusMeters
         }
