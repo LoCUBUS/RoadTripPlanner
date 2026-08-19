@@ -32,6 +32,7 @@ public extension Trip {
         anchor.mapItemIdentifier = mapItemIdentifier
         reindexOrder()
         updatedAt = .now
+        markNeedsReview(after: .corridor)
         return anchor
     }
 
@@ -49,6 +50,7 @@ public extension Trip {
         anchor.mapItemIdentifier = mapItemIdentifier
         reindexOrder()
         updatedAt = .now
+        markNeedsReview(after: .corridor)
         return anchor
     }
 
@@ -64,6 +66,7 @@ public extension Trip {
         anchors.append(anchor)
         reindexOrder()
         updatedAt = .now
+        markNeedsReview(after: .corridor)
         return anchor
     }
 
@@ -72,6 +75,7 @@ public extension Trip {
         anchors.removeAll { $0.id == id }
         reindexOrder()
         updatedAt = .now
+        markNeedsReview(after: .corridor)
     }
 
     /// Reorders the middle section (waypoints/POIs/lodging) in place, using
@@ -84,6 +88,7 @@ public extension Trip {
         }
         reindexOrder()
         updatedAt = .now
+        markNeedsReview(after: .corridor)
     }
 
     /// Recomputes every anchor's `order` from scratch: start is always 0,

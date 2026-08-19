@@ -52,6 +52,7 @@ public extension Trip {
             anchors.append(poi)
             reindexOrder()
             updatedAt = .now
+            markNeedsReview(after: .pointsOfInterest)
             return POIAdditionResult(poi: poi, absorbedWaypoint: victim)
         }
 
@@ -64,6 +65,7 @@ public extension Trip {
         poi.trip = self
         reindexOrder()
         updatedAt = .now
+        markNeedsReview(after: .pointsOfInterest)
         return POIAdditionResult(poi: poi, absorbedWaypoint: nil)
     }
 
@@ -77,6 +79,7 @@ public extension Trip {
         }
         reindexOrder()
         updatedAt = .now
+        markNeedsReview(after: .pointsOfInterest)
     }
 
     /// Inserts a non-absorbing POI into the leg its coordinate projects

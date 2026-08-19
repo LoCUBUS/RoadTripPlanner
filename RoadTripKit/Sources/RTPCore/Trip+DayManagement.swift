@@ -34,6 +34,7 @@ public extension Trip {
         days.append(day)
         recomputeTimeUpPoint(for: day)
         updatedAt = .now
+        markNeedsReview(after: .overnights)
         return day
     }
 
@@ -67,6 +68,7 @@ public extension Trip {
             day.timeUpPoint = nil
         }
         updatedAt = .now
+        markNeedsReview(after: .overnights)
         return result
     }
 
@@ -93,6 +95,7 @@ public extension Trip {
         day.endAnchorID = lodging.id
         day.timeUpPoint = nil
         updatedAt = .now
+        markNeedsReview(after: .overnights)
         return lodging
     }
 
@@ -102,6 +105,7 @@ public extension Trip {
     func reopenDay(_ day: TripDay) {
         day.endAnchorID = nil
         updatedAt = .now
+        markNeedsReview(after: .overnights)
     }
 
     /// Updates an existing lodging anchor's title/coordinate in place
@@ -112,6 +116,7 @@ public extension Trip {
         anchor.coordinate = coordinate
         anchor.mapItemIdentifier = mapItemIdentifier
         updatedAt = .now
+        markNeedsReview(after: .overnights)
     }
 
     /// Removes a day's lodging anchor and merges it with the following day
@@ -144,6 +149,7 @@ public extension Trip {
 
         reindexOrder()
         updatedAt = .now
+        markNeedsReview(after: .overnights)
     }
 
     /// Updates a day's budget in place. Does not re-segment automatically —
@@ -151,6 +157,7 @@ public extension Trip {
     func updateBudget(day: TripDay, budget: TimeInterval) {
         day.budget = budget
         updatedAt = .now
+        markNeedsReview(after: .overnights)
     }
 
     /// Inserts `anchor` immediately after the anchor with `afterAnchorID`

@@ -98,6 +98,7 @@ public final class POIEditorViewModel {
     public func setDwellDuration(_ duration: TimeInterval, for anchor: Anchor) {
         anchor.dwellDuration = Swift.max(0, duration)
         trip.updatedAt = .now
+        trip.markNeedsReview(after: .pointsOfInterest)
     }
 
     public func setCategory(_ category: POICategory?, for anchor: Anchor) {

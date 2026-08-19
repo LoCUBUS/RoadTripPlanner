@@ -13,6 +13,8 @@ public struct TripDetailView: View {
     private let photoAssetResolver: any PhotoAssetResolver = PHPhotoAssetResolver()
     private let routeCoordinator: RouteCoordinator
 
+    @State private var recalculatingPhase: Phase?
+
     public init(trip: Trip) {
         self.trip = trip
         self.routeCoordinator = RouteCoordinator(provider: AppleMapsProvider())
@@ -37,8 +39,26 @@ public struct TripDetailView: View {
 
                 if let reviewedPhases = reviewBanners, !reviewedPhases.isEmpty {
                     ForEach(reviewedPhases, id: \.self) { phase in
-                        Label("\(phase.displayName) may be out of date \u{2014} Recalculate", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("\(phase.displayName) may be out of date", systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            HStack {
+                                Button {
+                                    Task { await recalculate(phase) }
+                                } label: {
+                                    if recalculatingPhase == phase {
+                                        ProgressView()
+                                    } else {
+                                        Text("Recalculate")
+                                    }
+                                }
+                                .disabled(recalculatingPhase != nil)
+                                Button("Dismiss") {
+                                    trip.markReviewed(phase)
+                                }
+                                .disabled(recalculatingPhase != nil)
+                            }
+                        }
                     }
                 }
             }
@@ -78,6 +98,30 @@ public struct TripDetailView: View {
     private var reviewBanners: [Phase]? {
         let flagged = trip.phaseStatus.filter { $0.value.needsReview }.keys.sorted()
         return flagged.isEmpty ? nil : flagged
+    }
+
+    /// Recalculates the data a flagged phase depends on, then clears its
+    /// review flag — never deleting anything (docs/CONCEPT.md §1.6,
+    /// principle P2). Corridor/POI edits invalidate cached route legs, so
+    /// those two phases re-run `RouteRecalculator`. Overnights re-segments
+    /// its currently open day, if any. Summary and journal hold user-entered
+    /// state (visited/comment/rating/captions) that upstream edits never
+    /// invalidate directly, so dismissing simply clears the flag.
+    private func recalculate(_ phase: Phase) async {
+        recalculatingPhase = phase
+        defer { recalculatingPhase = nil }
+
+        switch phase {
+        case .corridor, .pointsOfInterest:
+            _ = await RouteRecalculator.recalculate(trip: trip, using: routeCoordinator)
+        case .overnights:
+            if let openDay = trip.days.sorted(by: { $0.index < $1.index }).first(where: { $0.endAnchorID == nil }) {
+                trip.recomputeTimeUpPoint(for: openDay)
+            }
+        case .summary, .journal:
+            break
+        }
+        trip.markReviewed(phase)
     }
 }
 
