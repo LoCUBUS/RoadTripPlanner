@@ -10,6 +10,7 @@ import RTPRouting
 public struct TripDetailView: View {
     @Bindable var trip: Trip
     private let mapProvider: any MapProvider = AppleMapsProvider()
+    private let photoAssetResolver: any PhotoAssetResolver = PHPhotoAssetResolver()
     private let routeCoordinator: RouteCoordinator
 
     public init(trip: Trip) {
@@ -63,8 +64,11 @@ public struct TripDetailView: View {
                 } label: {
                     Label("View Summary", systemImage: "list.bullet.rectangle")
                 }
-                Text("The journal editor lands in its own work item.")
-                    .foregroundStyle(.secondary)
+                NavigationLink {
+                    PhotoJournalView(trip: trip, assetResolver: photoAssetResolver, mapProvider: mapProvider)
+                } label: {
+                    Label("Journal", systemImage: "photo.on.rectangle.angled")
+                }
             }
         }
         .formStyle(.grouped)
