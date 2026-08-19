@@ -38,4 +38,19 @@ public enum POICategory: String, Codable, Sendable, CaseIterable {
         default: false
         }
     }
+
+    public var displayName: String {
+        switch self {
+        case .sight: "Sight"
+        case .viewpoint: "Viewpoint"
+        case .nature: "Nature"
+        case .museum: "Museum"
+        case .restaurant: "Restaurant"
+        case .hotel: "Hotel"
+        case .motel: "Motel"
+        case .campground: "Campground"
+        case .rvPark: "RV Park"
+        case .other: "Other"
+        }
+    }
 }

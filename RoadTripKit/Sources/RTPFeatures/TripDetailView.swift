@@ -48,7 +48,12 @@ public struct TripDetailView: View {
                 } label: {
                     Label("Edit Corridor", systemImage: "map")
                 }
-                Text("POI, overnight, summary and journal editors land in their own work items.")
+                NavigationLink {
+                    POIEditorView(trip: trip, routeCoordinator: routeCoordinator, provider: mapProvider)
+                } label: {
+                    Label("Edit Points of Interest", systemImage: "star.circle")
+                }
+                Text("Overnight, summary and journal editors land in their own work items.")
                     .foregroundStyle(.secondary)
             }
         }

@@ -26,4 +26,30 @@ public struct Coordinate: Codable, Sendable, Equatable, Hashable {
         let c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return earthRadius * c
     }
+
+    /// Approximate distance in meters from this coordinate to the line
+    /// segment between `start` and `end`. Used by the Phase 2 projection-
+    /// based POI insertion (docs/CONCEPT.md §2.5) to find the leg a new,
+    /// non-absorbed POI is closest to. Projects onto a local equirectangular
+    /// plane centred on `start` — accurate at route-segment scale, not
+    /// intended for continental spans.
+    public func distance(toSegmentFrom start: Coordinate, to end: Coordinate) -> Double {
+        let metersPerDegreeLat = 111_320.0
+        let latRad = start.latitude * .pi / 180
+        let metersPerDegreeLon = 111_320.0 * cos(latRad)
+
+        func planar(_ c: Coordinate) -> (x: Double, y: Double) {
+            ((c.longitude - start.longitude) * metersPerDegreeLon, (c.latitude - start.latitude) * metersPerDegreeLat)
+        }
+
+        let p = planar(self)
+        let b = planar(end)
+        let lengthSquared = b.x * b.x + b.y * b.y
+        let t: Double = lengthSquared == 0 ? 0 : Swift.max(0, Swift.min(1, (p.x * b.x + p.y * b.y) / lengthSquared))
+        let closestX = t * b.x
+        let closestY = t * b.y
+        let dx = p.x - closestX
+        let dy = p.y - closestY
+        return (dx * dx + dy * dy).squareRoot()
+    }
 }

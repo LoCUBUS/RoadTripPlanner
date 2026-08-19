@@ -67,42 +67,14 @@ public final class CorridorEditorViewModel {
     }
 
     /// Recomputes only the legs invalidated since the last call, persisting
-    /// the results into `trip.legs` and dropping any leg whose endpoints are
-    /// no longer adjacent in the current anchor chain.
+    /// the results into `trip.legs` via the shared `RouteRecalculator`.
     public func recalculateRoute() async {
-        let chain = orderedAnchors
-        guard chain.count >= 2 else {
-            trip.legs.removeAll()
-            return
-        }
-
         isRecalculating = true
         recalculationError = nil
         defer { isRecalculating = false }
 
-        let anchorPoints = chain.map(AnchorPoint.init(anchor:))
-        let results = await routeCoordinator.resolveLegs(for: anchorPoints)
-
-        var legsByKey: [RouteCoordinator.LegKey: RouteLeg] = [:]
-        for leg in trip.legs {
-            legsByKey[RouteCoordinator.LegKey(from: leg.fromAnchorID, to: leg.toAnchorID)] = leg
-        }
-
-        var keptLegs: [RouteLeg] = []
-        for result in results {
-            let key = RouteCoordinator.LegKey(from: result.fromAnchorID, to: result.toAnchorID)
-            let leg = legsByKey[key] ?? RouteLeg(fromAnchorID: result.fromAnchorID, toAnchorID: result.toAnchorID)
-            leg.distanceMeters = result.route.distanceMeters
-            leg.expectedTravelTime = result.route.expectedTravelTime
-            leg.polylineCoordinates = result.route.polyline
-            leg.computedAt = result.computedAt
-            leg.isStale = result.isStale
-            leg.trip = trip
-            keptLegs.append(leg)
-        }
-        trip.legs = keptLegs
-
-        if results.contains(where: \.isStale) {
+        let outcome = await RouteRecalculator.recalculate(trip: trip, using: routeCoordinator)
+        if outcome.hasStaleLegs {
             recalculationError = "Some legs could not be routed and use a straight-line estimate."
         }
     }
