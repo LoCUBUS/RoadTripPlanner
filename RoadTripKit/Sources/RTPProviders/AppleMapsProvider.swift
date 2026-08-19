@@ -2,7 +2,7 @@ import Foundation
 import MapKit
 import RTPCore
 
-extension Coordinate {
+public extension Coordinate {
     var clLocationCoordinate2D: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }

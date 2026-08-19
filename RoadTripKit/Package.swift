@@ -46,6 +46,10 @@ let package = Package(
         .testTarget(
             name: "RTPRoutingTests",
             dependencies: ["RTPCore", "RTPRouting", "RTPProviders"]
+        ),
+        .testTarget(
+            name: "RTPFeaturesTests",
+            dependencies: ["RTPCore", "RTPProviders", "RTPFeatures"]
         )
     ]
 )
