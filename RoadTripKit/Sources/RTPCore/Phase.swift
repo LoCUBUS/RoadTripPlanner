@@ -12,6 +12,19 @@ public enum Phase: Int, CaseIterable, Codable, Sendable, Comparable {
     public static func < (lhs: Phase, rhs: Phase) -> Bool {
         lhs.rawValue < rhs.rawValue
     }
+
+    /// English-only in v1 (see docs/CONCEPT.md — no localization beyond
+    /// English is in scope yet), but routed through a single place so a
+    /// later String Catalog key swap is a one-line change.
+    public var displayName: String {
+        switch self {
+        case .corridor: "Corridor"
+        case .pointsOfInterest: "Points of Interest"
+        case .overnights: "Overnights"
+        case .summary: "Summary"
+        case .journal: "Journal"
+        }
+    }
 }
 
 /// Tracks whether the data produced by a phase is still consistent with any
