@@ -45,4 +45,17 @@ public final class RouteLeg {
         self.computedAt = computedAt
         self.isStale = isStale
     }
+
+    /// Convenience accessor decoding/encoding `encodedPolyline` as a plain
+    /// `[Coordinate]`. A simple JSON encoding is used rather than a
+    /// specialised polyline compression algorithm — it keeps `RTPCore` free
+    /// of extra dependencies; revisit if leg storage size becomes a concern.
+    public var polylineCoordinates: [Coordinate] {
+        get {
+            (try? JSONDecoder().decode([Coordinate].self, from: encodedPolyline)) ?? []
+        }
+        set {
+            encodedPolyline = (try? JSONEncoder().encode(newValue)) ?? Data()
+        }
+    }
 }

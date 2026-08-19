@@ -66,6 +66,11 @@ public actor RouteCoordinator {
     public struct LegKey: Hashable, Sendable {
         public var from: UUID
         public var to: UUID
+
+        public init(from: UUID, to: UUID) {
+            self.from = from
+            self.to = to
+        }
     }
 
     private let provider: any MapProvider

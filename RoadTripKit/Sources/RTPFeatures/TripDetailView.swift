@@ -2,19 +2,19 @@ import SwiftData
 import SwiftUI
 import RTPCore
 import RTPProviders
+import RTPRouting
 
 /// Trip-level editing: rename, notes, and the current phase indicator.
-/// The per-phase editors (corridor, POIs, overnights, summary, journal)
-/// are built in their own work items and will replace the placeholder
-/// section below. A read-only "Show on Map" sheet exercises the shared
-/// `MapCanvasView` component ahead of that per-phase wiring.
+/// The Phase 1 corridor editor is wired in below; POI/overnight/summary/
+/// journal editors land in their own work items.
 public struct TripDetailView: View {
     @Bindable var trip: Trip
-    @State private var showsMap = false
     private let mapProvider: any MapProvider = AppleMapsProvider()
+    private let routeCoordinator: RouteCoordinator
 
     public init(trip: Trip) {
         self.trip = trip
+        self.routeCoordinator = RouteCoordinator(provider: AppleMapsProvider())
     }
 
     public var body: some View {
@@ -43,44 +43,17 @@ public struct TripDetailView: View {
             }
 
             Section {
-                Button {
-                    showsMap = true
+                NavigationLink {
+                    CorridorEditorView(trip: trip, routeCoordinator: routeCoordinator, provider: mapProvider)
                 } label: {
-                    Label("Show on Map", systemImage: "map")
+                    Label("Edit Corridor", systemImage: "map")
                 }
-                Text("Corridor, POI, overnight, summary and journal editors land in their own work items.")
+                Text("POI, overnight, summary and journal editors land in their own work items.")
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .navigationTitle(trip.name.isEmpty ? "Untitled Trip" : trip.name)
-        .sheet(isPresented: $showsMap) {
-            NavigationStack {
-                MapCanvasView(
-                    annotations: trip.anchors.sorted { $0.order < $1.order }.map(MapCanvasAnnotation.init(anchor:)),
-                    searchRegion: mapRegion,
-                    provider: mapProvider
-                )
-                .navigationTitle("Map")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") { showsMap = false }
-                    }
-                }
-            }
-            #if os(macOS)
-            .frame(minWidth: 500, minHeight: 500)
-            #endif
-        }
-    }
-
-    /// A reasonable default region for the map sheet: centred on the first
-    /// anchor if the trip has one, otherwise a wide view of central Europe.
-    private var mapRegion: MapRegion {
-        if let first = trip.anchors.sorted(by: { $0.order < $1.order }).first {
-            return MapRegion(center: first.coordinate, latitudeDelta: 5, longitudeDelta: 5)
-        }
-        return MapRegion(center: Coordinate(latitude: 48.1351, longitude: 11.5820), latitudeDelta: 10, longitudeDelta: 10)
     }
 
     private var reviewBanners: [Phase]? {

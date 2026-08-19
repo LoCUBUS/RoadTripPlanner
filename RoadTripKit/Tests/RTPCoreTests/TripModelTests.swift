@@ -20,6 +20,27 @@ struct CoordinateTests {
     }
 }
 
+@Suite("RouteLeg")
+struct RouteLegTests {
+    @Test("polylineCoordinates round-trips through the encoded Data storage")
+    func polylineRoundTrips() {
+        let leg = RouteLeg(fromAnchorID: UUID(), toAnchorID: UUID())
+        let coordinates = [
+            Coordinate(latitude: 48.1351, longitude: 11.5820),
+            Coordinate(latitude: 49.4579, longitude: 11.0775)
+        ]
+        leg.polylineCoordinates = coordinates
+        #expect(leg.polylineCoordinates == coordinates)
+        #expect(!leg.encodedPolyline.isEmpty)
+    }
+
+    @Test("An empty encodedPolyline decodes to an empty array")
+    func emptyPolylineDecodesEmpty() {
+        let leg = RouteLeg(fromAnchorID: UUID(), toAnchorID: UUID())
+        #expect(leg.polylineCoordinates.isEmpty)
+    }
+}
+
 @Suite("Trip model", .serialized)
 struct TripModelTests {
     private func makeContext() throws -> ModelContext {
