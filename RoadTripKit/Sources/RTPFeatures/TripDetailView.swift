@@ -58,7 +58,12 @@ public struct TripDetailView: View {
                 } label: {
                     Label("Plan Overnights", systemImage: "bed.double")
                 }
-                Text("Summary and journal editors land in their own work items.")
+                NavigationLink {
+                    SummaryView(trip: trip, mapProvider: mapProvider)
+                } label: {
+                    Label("View Summary", systemImage: "list.bullet.rectangle")
+                }
+                Text("The journal editor lands in its own work item.")
                     .foregroundStyle(.secondary)
             }
         }
