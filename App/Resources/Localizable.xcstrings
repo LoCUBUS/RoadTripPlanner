@@ -1,0 +1,10 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "RoadTripPlanner" : {
+      "extractionState" : "manual",
+      "comment" : "App name, shown on the home screen and window title."
+    }
+  },
+  "version" : "1.0"
+}
