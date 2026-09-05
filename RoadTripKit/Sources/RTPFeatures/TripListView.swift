@@ -87,20 +87,48 @@ public struct TripListView: View {
                 ContentUnavailableView("No Trips Yet", systemImage: "map", description: Text("Create a trip to get started."))
             }
         }
-        .toolbar {
-            ToolbarItemGroup {
-                Button(action: createTrip) {
-                    Label("New Trip", systemImage: "plus")
-                }
-                .keyboardShortcut("n", modifiers: .command)
-                if selection != nil {
-                    Button { duplicate(selection!) } label: {
-                        Label("Duplicate Trip", systemImage: "plus.square.on.square")
-                    }
-                    .keyboardShortcut("d", modifiers: .command)
-                }
-            }
+        .safeAreaInset(edge: .bottom) {
+            sidebarFooter
         }
+    }
+
+    /// Trip management actions, pinned to the bottom of the trip list
+    /// itself rather than the window's main toolbar — `NavigationSplitView`
+    /// hoists sidebar-column `.toolbar` items into the shared window
+    /// toolbar on macOS, which put "New Trip" far from the list it affects.
+    private var sidebarFooter: some View {
+        HStack(spacing: 12) {
+            Button(action: createTrip) {
+                Label("New Trip", systemImage: "plus")
+            }
+            .help("Create a new trip")
+            .keyboardShortcut("n", modifiers: .command)
+
+            Button {
+                if let selection { duplicate(selection) }
+            } label: {
+                Label("Duplicate Trip", systemImage: "plus.square.on.square")
+            }
+            .help("Duplicate the selected trip")
+            .keyboardShortcut("d", modifiers: .command)
+            .disabled(selection == nil)
+
+            Button(role: .destructive) {
+                if let selection { tripPendingDeletion = selection }
+            } label: {
+                Label("Delete Trip", systemImage: "trash")
+            }
+            .help("Delete the selected trip")
+            .disabled(selection == nil)
+
+            Spacer()
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .controlSize(.large)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.bar)
     }
 
     private func selectInitialTrip() {

@@ -95,7 +95,11 @@ public extension Trip {
     /// SwiftData relationship arrays are not guaranteed to preserve
     /// insertion order (docs/CONCEPT.md §2.2), so a tied `order` value would
     /// sort unpredictably instead of always landing after its neighbour.
-    private func insertByProjection(_ poi: Anchor) {
+    /// Not `private` — reused by `Trip+CorridorEditing.addWaypoint` when the
+    /// middle section already contains fixed Phase 2/3 anchors, so a new
+    /// Phase 1 waypoint lands at a sensible position without re-sorting
+    /// anchors a later phase has already refined (principle P2).
+    func insertByProjection(_ poi: Anchor) {
         let chain = orderedAnchors
         guard chain.count >= 2 else {
             let maxMiddleOrder = orderedMiddleAnchors.map(\.order).max() ?? 0

@@ -76,6 +76,29 @@ public final class CorridorEditorViewModel {
         scheduleAutoRecalculation()
     }
 
+    /// Whether "Optimize Order" should be enabled: there must be at least
+    /// two waypoints to reorder, and the middle section must not already
+    /// contain a fixed Phase 2/3 anchor (POI/lodging) — `optimizeOrder()`
+    /// is then a no-op anyway, so the action is hidden instead of offered
+    /// as a button that silently does nothing.
+    public var canOptimizeOrder: Bool {
+        let middle = orderedMiddleAnchors
+        guard middle.contains(where: { $0.kind == .waypoint }) else { return false }
+        guard !middle.contains(where: { $0.kind == .poi || $0.kind == .lodging }) else { return false }
+        return middle.filter({ $0.kind == .waypoint }).count > 1
+    }
+
+    /// Explicitly re-sorts the coarse Phase 1 waypoints into a
+    /// geometrically efficient order. Unlike `addWaypoint`, this is only
+    /// ever triggered by an explicit user action (the Corridor inspector's
+    /// "Optimize Order" button) — never automatically after a manual
+    /// `moveMiddleAnchors` drag, so a manual reorder never immediately
+    /// snaps back.
+    public func optimizeOrder() {
+        trip.optimizeWaypointOrder()
+        scheduleAutoRecalculation()
+    }
+
     /// Recomputes only the legs invalidated since the last call, persisting
     /// the results into `trip.legs` via the shared `RouteRecalculator`.
     public func recalculateRoute() async {

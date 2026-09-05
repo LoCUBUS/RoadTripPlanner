@@ -71,53 +71,6 @@ public struct CorridorInspector: View {
 
             Divider()
 
-            // MARK: - Destination Search
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Destination")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                
-                if let destination = viewModel.orderedAnchors.first(where: { $0.kind == .destination }) {
-                    HStack {
-                        Label(destination.title, systemImage: "flag.fill")
-                        Spacer()
-                        Button(action: { clearDestination() }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.vertical, 4)
-                } else {
-                    TextField("Search destination...", text: $corridorSearchModel.destinationQuery)
-                        .textFieldStyle(.roundedBorder)
-                        .onChange(of: corridorSearchModel.destinationQuery) { oldValue, newValue in
-                            corridorSearchModel.updateDestinationQuery(newValue)
-                        }
-                    
-                    if !corridorSearchModel.destinationSearch.results.isEmpty {
-                        ForEach(corridorSearchModel.destinationSearch.results, id: \.id) { result in
-                            SearchResultRow(result: result) {
-                                selectDestination(result: result)
-                            }
-                        }
-                    }
-                    
-                    if corridorSearchModel.destinationSearch.isSearching {
-                        HStack {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                            Text("Searching...")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
-
-            Divider()
-
             // MARK: - Waypoints
             VStack(alignment: .leading, spacing: 4) {
                 Text("Waypoints")
@@ -172,6 +125,63 @@ public struct CorridorInspector: View {
                     }
                     .onMove { offsets, destination in
                         viewModel.moveMiddleAnchors(fromOffsets: offsets, toOffset: destination)
+                    }
+
+                    if viewModel.canOptimizeOrder {
+                        Button {
+                            viewModel.optimizeOrder()
+                        } label: {
+                            Label("Optimize Order", systemImage: "wand.and.stars")
+                        }
+                        .help("Re-sort waypoints into the most efficient visiting order")
+                        .padding(.top, 4)
+                    }
+                }
+            }
+
+            Divider()
+
+            // MARK: - Destination Search
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Destination")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                if let destination = viewModel.orderedAnchors.first(where: { $0.kind == .destination }) {
+                    HStack {
+                        Label(destination.title, systemImage: "flag.fill")
+                        Spacer()
+                        Button(action: { clearDestination() }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 4)
+                } else {
+                    TextField("Search destination...", text: $corridorSearchModel.destinationQuery)
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: corridorSearchModel.destinationQuery) { oldValue, newValue in
+                            corridorSearchModel.updateDestinationQuery(newValue)
+                        }
+                    
+                    if !corridorSearchModel.destinationSearch.results.isEmpty {
+                        ForEach(corridorSearchModel.destinationSearch.results, id: \.id) { result in
+                            SearchResultRow(result: result) {
+                                selectDestination(result: result)
+                            }
+                        }
+                    }
+                    
+                    if corridorSearchModel.destinationSearch.isSearching {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                            Text("Searching...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
                     }
                 }
             }

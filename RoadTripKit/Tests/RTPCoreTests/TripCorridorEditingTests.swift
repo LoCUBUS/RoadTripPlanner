@@ -32,7 +32,7 @@ struct TripCorridorEditingTests {
         #expect(trip.orderedAnchors.first?.title == "Munich Central")
     }
 
-    @Test("Waypoints are appended before the destination, in insertion order")
+    @Test("Waypoints are appended before the destination, in insertion order when that's already geometrically optimal")
     func addWaypointOrdering() {
         let trip = Trip(name: "Test")
         trip.setStart(title: "Munich", coordinate: munich)
@@ -42,6 +42,58 @@ struct TripCorridorEditingTests {
 
         let titles = trip.orderedAnchors.map(\.title)
         #expect(titles == ["Munich", "Nuremberg", "Berlin", "Lisbon"])
+    }
+
+    @Test("addWaypoint re-sorts the middle section into a geometrically efficient order, regardless of insertion order")
+    func addWaypointReordersIntoEfficientSequence() {
+        let trip = Trip(name: "Test")
+        trip.setStart(title: "Munich", coordinate: munich)
+        trip.setDestination(title: "Lisbon", coordinate: lisbon)
+        // Inserted in the "wrong" order (Berlin, further away, before
+        // Nuremberg, which is on the way) — the result should still come
+        // out geometrically ordered rather than in insertion order.
+        trip.addWaypoint(title: "Berlin", coordinate: berlin)
+        trip.addWaypoint(title: "Nuremberg", coordinate: nuremberg)
+
+        let titles = trip.orderedAnchors.map(\.title)
+        #expect(titles == ["Munich", "Nuremberg", "Berlin", "Lisbon"])
+    }
+
+    @Test("addWaypoint does not re-sort the middle section once a POI has been added")
+    func addWaypointDoesNotReorderOncePOIExists() {
+        let trip = Trip(name: "Test")
+        trip.setStart(title: "Munich", coordinate: munich)
+        trip.setDestination(title: "Lisbon", coordinate: lisbon)
+        trip.addWaypoint(title: "Berlin", coordinate: berlin)
+        // A Phase 2 POI now fixes part of the middle section — a
+        // subsequently added waypoint must not trigger a full re-sort,
+        // since that would silently undo positioning work from a later
+        // phase (docs/CONCEPT.md principle P2).
+        trip.addPOI(title: "Nuremberg Castle", coordinate: nuremberg)
+
+        trip.addWaypoint(title: "Frankfurt", coordinate: Coordinate(latitude: 50.1109, longitude: 8.6821))
+
+        let titles = trip.orderedAnchors.map(\.title)
+        #expect(titles.first == "Munich")
+        #expect(titles.last == "Lisbon")
+        // Berlin (inserted before the POI existed) keeps its original
+        // relative position — it is not moved by the later Frankfurt add.
+        #expect(titles.firstIndex(of: "Berlin")! < titles.firstIndex(of: "Frankfurt")!)
+    }
+
+    @Test("optimizeWaypointOrder is a no-op once a POI or lodging anchor exists in the middle section")
+    func optimizeWaypointOrderNoOpWithFixedAnchors() {
+        let trip = Trip(name: "Test")
+        trip.setStart(title: "Munich", coordinate: munich)
+        trip.setDestination(title: "Lisbon", coordinate: lisbon)
+        trip.addWaypoint(title: "Berlin", coordinate: berlin)
+        trip.addPOI(title: "Nuremberg Castle", coordinate: nuremberg)
+
+        let before = trip.orderedAnchors.map(\.title)
+        trip.optimizeWaypointOrder()
+        let after = trip.orderedAnchors.map(\.title)
+
+        #expect(before == after)
     }
 
     @Test("Waypoints can be appended before start/destination are set")
