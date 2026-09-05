@@ -2,36 +2,31 @@ import SwiftUI
 import RTPCore
 import RTPProviders
 
-/// Phase 4 summary: a day-by-day itinerary with per-stop Apple Maps
-/// hand-off, a visited toggle, and a comment/rating field
-/// (docs/CONCEPT.md §1.5 "Phase 4 — Summary"). Reachable at any time (P1);
-/// purely reads what the earlier phases already planned.
-public struct SummaryView: View {
-    @State private var viewModel: SummaryViewModel
+/// Phase 4 inspector: a day-by-day itinerary with per-stop Apple Maps
+/// hand-off, a visited toggle, and a comment/rating field (docs/CONCEPT.md
+/// §1.5 "Phase 4 — Summary"). Reachable at any time (P1); purely reads what
+/// the earlier phases already planned — the map is read-only while this
+/// phase is active.
+public struct SummaryInspector: View {
+    var viewModel: SummaryViewModel
     @Environment(\.openURL) private var openURL
 
-    public init(trip: Trip, mapProvider: any MapProvider) {
-        _viewModel = State(initialValue: SummaryViewModel(trip: trip, mapProvider: mapProvider))
+    public init(viewModel: SummaryViewModel) {
+        self.viewModel = viewModel
     }
 
     public var body: some View {
-        List {
+        Group {
             if viewModel.days.isEmpty {
-                Section {
-                    Text("Plan at least one day in \u{201C}Plan Overnights\u{201D} to see a summary here.")
-                        .foregroundStyle(.secondary)
-                }
+                Text("Plan at least one day in \u{201C}Overnights\u{201D} to see a summary here.")
+                    .foregroundStyle(.secondary)
             }
 
             ForEach(viewModel.days) { day in
-                Section {
-                    dayHeader(day)
-                    ForEach(viewModel.anchors(in: day)) { anchor in
-                        StopRow(anchor: anchor, viewModel: viewModel, openURL: openURL)
-                    }
-                } header: {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Day \(day.index + 1)")
+                            .font(.headline)
                         Spacer()
                         if let url = viewModel.navigationURL(for: day) {
                             Button {
@@ -42,10 +37,17 @@ public struct SummaryView: View {
                             .font(.footnote)
                         }
                     }
+                    dayHeader(day)
+                    ForEach(viewModel.anchors(in: day)) { anchor in
+                        StopRow(anchor: anchor, viewModel: viewModel, openURL: openURL)
+                    }
+                }
+                .padding(.vertical, 4)
+                if day.id != viewModel.days.last?.id {
+                    Divider()
                 }
             }
         }
-        .navigationTitle("Summary")
     }
 
     private func dayHeader(_ day: TripDay) -> some View {

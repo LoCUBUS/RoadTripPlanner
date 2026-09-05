@@ -1,77 +1,48 @@
 import SwiftUI
 import RTPCore
-import RTPProviders
 import RTPRouting
 
-/// Phase 3 editor: set a daily travel-time budget, see the time-up point
-/// where it runs out, search for lodging there (or drop a pin manually),
-/// and resolve a dwell-time overrun (docs/CONCEPT.md §1.5 "Phase 3 —
-/// Overnight stays", §2.6). Reachable at any time (P1).
-public struct DayPlannerView: View {
-    @State private var viewModel: DayPlannerViewModel
-    private let provider: any MapProvider
+/// Phase 3 inspector: set a daily travel-time budget, see the time-up point
+/// where it runs out, search for lodging there (or drop a pin manually via
+/// the map), and resolve a dwell-time overrun (docs/CONCEPT.md §1.5
+/// "Phase 3 — Overnight stays", §2.6). Map long-presses are routed through
+/// `TripWorkspaceModel`, which raises `pendingLodgingPoint` for the
+/// workspace shell to present `LodgingNameSheet` for. Reachable at any time
+/// (P1).
+public struct DayPlannerInspector: View {
+    @Bindable var viewModel: DayPlannerViewModel
 
     @State private var budgetHours: Double = 5
-    @State private var manualLodgingPoint: PendingLodgingPoint?
     @State private var shortenDwellMinutes: Int = 30
 
-    public init(trip: Trip, routeCoordinator: RouteCoordinator, provider: any MapProvider) {
-        _viewModel = State(initialValue: DayPlannerViewModel(trip: trip, routeCoordinator: routeCoordinator, mapProvider: provider))
-        self.provider = provider
+    public init(viewModel: DayPlannerViewModel) {
+        self.viewModel = viewModel
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            MapCanvasView(
-                annotations: mapAnnotations,
-                routePolylines: viewModel.trip.legs.map(\.polylineCoordinates),
-                searchRegion: searchRegion,
-                provider: provider,
-                onLongPress: { coordinate in
-                    manualLodgingPoint = PendingLodgingPoint(title: "Dropped Pin", coordinate: coordinate, mapItemIdentifier: nil)
-                }
-            )
-            .frame(minHeight: 260)
+        Group {
+            if let day = viewModel.openDay {
+                openDaySections(day)
+            } else if viewModel.canStartNextDay {
+                startDaySection
+            } else {
+                Text("All days are planned — the trip reaches its destination.")
+                    .foregroundStyle(.secondary)
+            }
 
-            List {
-                if let day = viewModel.openDay {
-                    openDaySections(day)
-                } else if viewModel.canStartNextDay {
-                    startDaySection
-                } else {
-                    Section {
-                        Text("All days are planned — the trip reaches its destination.")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if !viewModel.closedDays.isEmpty {
-                    Section("Planned Days") {
-                        ForEach(viewModel.closedDays) { day in
-                            DaySummaryRow(day: day)
-                        }
-                    }
-                }
-
-                if let error = viewModel.recalculationError {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                    }
+            if !viewModel.closedDays.isEmpty {
+                Divider()
+                Text("Planned Days")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ForEach(viewModel.closedDays) { day in
+                    DaySummaryRow(day: day)
                 }
             }
-        }
-        .navigationTitle("Overnights")
-        .sheet(item: $manualLodgingPoint) { point in
-            if let day = viewModel.openDay, let afterID = viewModel.lodgingInsertionAnchorID(for: day) {
-                LodgingNameSheet(
-                    point: point,
-                    onAdd: { title in
-                        viewModel.closeDay(day, afterAnchorID: afterID, title: title, coordinate: point.coordinate, mapItemIdentifier: point.mapItemIdentifier)
-                        manualLodgingPoint = nil
-                    },
-                    onCancel: { manualLodgingPoint = nil }
-                )
+
+            if let error = viewModel.recalculationError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
             }
         }
     }
@@ -79,7 +50,7 @@ public struct DayPlannerView: View {
     // MARK: - Sections
 
     private var startDaySection: some View {
-        Section("Start Next Day") {
+        Group {
             Stepper("Budget: \(String(format: "%.1f", budgetHours)) h", value: $budgetHours, in: 1...16, step: 0.5)
             Button("Start Day \(viewModel.days.count + 1)") {
                 viewModel.startNextDay(budget: budgetHours * 3600)
@@ -89,20 +60,20 @@ public struct DayPlannerView: View {
 
     @ViewBuilder
     private func openDaySections(_ day: TripDay) -> some View {
-        Section("Day \(day.index + 1)") {
-            Stepper(
-                "Budget: \(String(format: "%.1f", day.budget / 3600)) h",
-                value: Binding(
-                    get: { day.budget / 3600 },
-                    set: { viewModel.updateBudget(day: day, budget: $0 * 3600) }
-                ),
-                in: 1...16,
-                step: 0.5
-            )
+        Text("Day \(day.index + 1)")
+            .font(.headline)
+        Stepper(
+            "Budget: \(String(format: "%.1f", day.budget / 3600)) h",
+            value: Binding(
+                get: { day.budget / 3600 },
+                set: { viewModel.updateBudget(day: day, budget: $0 * 3600) }
+            ),
+            in: 1...16,
+            step: 0.5
+        )
 
-            if viewModel.isRecalculating {
-                ProgressView("Recalculating route…")
-            }
+        if viewModel.isRecalculating {
+            ProgressView("Recalculating route…")
         }
 
         if let outcome = viewModel.lastSegmentation?.outcome {
@@ -112,14 +83,12 @@ public struct DayPlannerView: View {
             case .dwellOverrun(let anchorID, let anchorTitle, _, let overshoot):
                 dwellOverrunSection(day: day, anchorID: anchorID, anchorTitle: anchorTitle, overshoot: overshoot)
             case .legNotYetResolved:
-                Section {
-                    Text("Some legs haven't been routed yet.")
-                        .foregroundStyle(.secondary)
-                    Button {
-                        Task { await viewModel.recalculateRoute() }
-                    } label: {
-                        Label("Recalculate Route", systemImage: "arrow.triangle.2.circlepath")
-                    }
+                Text("Some legs haven't been routed yet.")
+                    .foregroundStyle(.secondary)
+                Button {
+                    Task { await viewModel.recalculateRoute() }
+                } label: {
+                    Label("Recalculate Route", systemImage: "arrow.triangle.2.circlepath")
                 }
             case .reachedDestination:
                 EmptyView() // openNextDay/recomputeTimeUpPoint auto-closes this case.
@@ -128,7 +97,12 @@ public struct DayPlannerView: View {
     }
 
     private func lodgingSearchSection(_ day: TripDay) -> some View {
-        Section("Overnight Near Time-Up Point") {
+        Group {
+            Divider()
+            Text("Overnight Near Time-Up Point")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             Toggle("Lodging categories only", isOn: $viewModel.lodgingCategoryFilterEnabled)
 
             Stepper(
@@ -183,7 +157,11 @@ public struct DayPlannerView: View {
     }
 
     private func dwellOverrunSection(day: TripDay, anchorID: UUID, anchorTitle: String, overshoot: TimeInterval) -> some View {
-        Section("\u{201C}\(anchorTitle)\u{201D} Doesn't Fit Today's Budget") {
+        Group {
+            Divider()
+            Text("\u{201C}\(anchorTitle)\u{201D} Doesn't Fit Today's Budget")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Text("Staying the full dwell time would overshoot the budget by \(Int(overshoot / 60)) min.")
                 .foregroundStyle(.secondary)
 
@@ -200,40 +178,12 @@ public struct DayPlannerView: View {
             }
         }
     }
-
-    // MARK: - Helpers
-
-    private var mapAnnotations: [MapCanvasAnnotation] {
-        var annotations = viewModel.trip.orderedAnchors.map(MapCanvasAnnotation.init(anchor:))
-        if let day = viewModel.openDay, let timeUpPoint = day.timeUpPoint {
-            annotations.append(MapCanvasAnnotation(coordinate: timeUpPoint, title: "Time's Up ≈", style: .timeUp))
-        }
-        return annotations
-    }
-
-    private var searchRegion: MapRegion {
-        if let day = viewModel.openDay, let point = day.timeUpPoint {
-            return MapRegion(center: point, latitudeDelta: 2, longitudeDelta: 2)
-        }
-        if let first = viewModel.trip.orderedAnchors.first {
-            return MapRegion(center: first.coordinate, latitudeDelta: 5, longitudeDelta: 5)
-        }
-        return MapRegion(center: Coordinate(latitude: 48.1351, longitude: 11.5820), latitudeDelta: 10, longitudeDelta: 10)
-    }
 }
 
-/// A point picked by long-press on the map, awaiting a name before it
-/// becomes a lodging anchor that closes the current day.
-struct PendingLodgingPoint: Identifiable {
-    let id = UUID()
-    let title: String
-    let coordinate: Coordinate
-    let mapItemIdentifier: String?
-}
-
-/// A short form to name a manually dropped lodging pin.
-private struct LodgingNameSheet: View {
-    let point: PendingLodgingPoint
+/// A short form to name a manually dropped lodging pin. Presented by the
+/// workspace shell as a sheet bound to `TripWorkspaceModel.pendingLodgingPoint`.
+struct LodgingNameSheet: View {
+    let point: PendingMapPoint
     let onAdd: (String) -> Void
     let onCancel: () -> Void
 
