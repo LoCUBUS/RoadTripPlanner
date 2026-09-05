@@ -30,6 +30,7 @@ public extension Trip {
         anchor.title = title
         anchor.coordinate = coordinate
         anchor.mapItemIdentifier = mapItemIdentifier
+        optimizeWaypointOrder()
         reindexOrder()
         updatedAt = .now
         markNeedsReview(after: .corridor)
@@ -48,22 +49,39 @@ public extension Trip {
         anchor.title = title
         anchor.coordinate = coordinate
         anchor.mapItemIdentifier = mapItemIdentifier
+        optimizeWaypointOrder()
         reindexOrder()
         updatedAt = .now
         markNeedsReview(after: .corridor)
         return anchor
     }
 
-    /// Appends a new coarse Phase 1 waypoint just before the destination
-    /// (or at the end if there is no destination yet). The user can freely
-    /// reorder it afterwards via `reorderMiddleAnchors`.
+    /// Adds a new coarse Phase 1 waypoint.
+    ///
+    /// If the middle section is still pure waypoints, the whole section is
+    /// re-sorted into a geometrically efficient visiting order via
+    /// `optimizeWaypointOrder()` — the user never has to manually reorder a
+    /// route made only of coarse stops. If a later phase has already added
+    /// a POI or lodging anchor, re-sorting would undo that work, so the new
+    /// waypoint is instead inserted at whichever position its coordinate
+    /// projects closest to, mirroring Phase 2's own insertion rule
+    /// (principle P2). Either way, the user can still reorder manually
+    /// afterwards via `reorderMiddleAnchors`.
     @discardableResult
     func addWaypoint(title: String, coordinate: Coordinate, mapItemIdentifier: String? = nil) -> Anchor {
-        let maxMiddleOrder = orderedMiddleAnchors.map(\.order).max() ?? 0
         let anchor = Anchor(kind: .waypoint, title: title, coordinate: coordinate, mapItemIdentifier: mapItemIdentifier)
-        anchor.order = maxMiddleOrder + 1
-        anchor.trip = self
-        anchors.append(anchor)
+
+        if middleSectionContainsFixedAnchors {
+            insertByProjection(anchor)
+            anchor.trip = self
+        } else {
+            let maxMiddleOrder = orderedMiddleAnchors.map(\.order).max() ?? 0
+            anchor.order = maxMiddleOrder + 1
+            anchor.trip = self
+            anchors.append(anchor)
+            optimizeWaypointOrder()
+        }
+
         reindexOrder()
         updatedAt = .now
         markNeedsReview(after: .corridor)
@@ -108,5 +126,45 @@ public extension Trip {
         if let destination = anchors.first(where: { $0.kind == .destination }) {
             destination.order = nextOrder
         }
+    }
+
+    /// Re-sorts every Phase 1 waypoint into a geometrically efficient
+    /// visiting order between start and destination, via
+    /// `RouteOrderOptimizer` (docs/CONCEPT.md §2.2). No-op when:
+    /// - fewer than two waypoints exist (nothing to reorder),
+    /// - start or destination is not yet set (nothing to optimize against),
+    /// - the middle section contains a POI or lodging anchor — re-sorting
+    ///   those would silently undo positioning work done in a later phase,
+    ///   which principle P2 forbids. In that case callers insert new
+    ///   waypoints by projection instead (see `addWaypoint`).
+    ///
+    /// Exposed as `public` (rather than called only internally) so the
+    /// Corridor inspector's explicit "Optimize Order" action can re-run it
+    /// on demand after a manual `reorderMiddleAnchors` call, which never
+    /// triggers it automatically.
+    func optimizeWaypointOrder() {
+        guard !middleSectionContainsFixedAnchors else { return }
+        let waypoints = orderedMiddleAnchors.filter { $0.kind == .waypoint }
+        guard waypoints.count > 1 else { return }
+        guard let start = anchors.first(where: { $0.kind == .start })?.coordinate,
+              let destination = anchors.first(where: { $0.kind == .destination })?.coordinate
+        else { return }
+
+        let optimizerWaypoints = waypoints.map { RouteOrderOptimizer.Waypoint(id: $0.id, coordinate: $0.coordinate) }
+        let orderedIDs = RouteOrderOptimizer.optimize(start: start, destination: destination, waypoints: optimizerWaypoints)
+
+        let anchorsByID = Dictionary(uniqueKeysWithValues: waypoints.map { ($0.id, $0) })
+        var nextOrder = waypoints.map(\.order).min() ?? 0
+        for id in orderedIDs {
+            anchorsByID[id]?.order = nextOrder
+            nextOrder += 1
+        }
+    }
+
+    /// Whether the middle section already contains a fixed Phase 2/3
+    /// anchor (POI or lodging) that `optimizeWaypointOrder()` must not
+    /// disturb.
+    private var middleSectionContainsFixedAnchors: Bool {
+        orderedMiddleAnchors.contains { $0.kind == .poi || $0.kind == .lodging }
     }
 }

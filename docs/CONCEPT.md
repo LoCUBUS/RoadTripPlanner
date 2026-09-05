@@ -65,12 +65,14 @@ executable day-by-day itinerary → travel journal.
   - AC: Duplicating copies all phases including POIs, days, lodging; photos and
     "visited"/comment state are **not** copied (a duplicate is a fresh trip).
   - AC: Deleting asks for confirmation and cascades to all child entities.
+  - AC: New/Duplicate/Delete actions live in a footer bar attached to the trip list itself, not the window's shared toolbar — so they stay visually attached to the list they act on.
 
 **Phase 1 — Coarse route**
 - *As a user I set a start and a destination and add coarse waypoints in between.*
   - AC: Start and destination are set via text search fields in the right inspector (addresses, POIs, landmarks); searches are region-biased toward existing anchors.
   - AC: Waypoint field is only active once start and destination are set; can be added via search or long-press on the map.
-  - AC: Waypoints are reorderable via drag & drop; the route auto-updates after each edit (debounced 500ms).
+  - AC: New waypoints are automatically re-sorted into a geometrically efficient visiting order (nearest-neighbour + 2-opt, exhaustive below 9 stops) as long as the middle section is still pure waypoints; an explicit "Optimize Order" button re-runs this on demand. Once a POI or lodging anchor exists in the middle section, a new waypoint is instead inserted at the position its coordinate projects closest to, so later-phase refinements are never silently undone.
+  - AC: Waypoints are reorderable via drag & drop; a manual reorder is never auto-re-sorted afterwards. The route auto-updates after each edit (debounced 500ms).
   - AC: Distance and driving time update live after each change (start, destination, waypoint add/remove/reorder).
   - AC: Result is a driving route Start → W₁ … Wₙ → Destination with total distance/duration.
   - AC: Phase 1 is complete when start + destination are set and a route was computed.
@@ -79,6 +81,7 @@ executable day-by-day itinerary → travel journal.
 **Phase 2 — Points of interest**
 - *As a user I add POIs to refine the route and say how long I want to stay.*
   - AC: A POI carries name, coordinate, category, and a **dwell duration** (default 45 min).
+  - AC: POIs are added via a dedicated text search field in the right inspector (mirroring Phase 1's), or by long-pressing the map — there is no separate search field on the map itself.
   - AC: **Absorption rule** — when a POI is added within 10 km (great-circle) of an existing
     *intermediate* Phase-1 waypoint, that waypoint is removed and the POI inherits its
     position in the order. Start and destination are never absorbed.

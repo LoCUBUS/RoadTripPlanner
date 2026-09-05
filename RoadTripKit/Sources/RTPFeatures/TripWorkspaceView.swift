@@ -70,8 +70,6 @@ public struct TripWorkspaceView: View {
                 annotations: workspace.mapAnnotations,
                 routePolylines: workspace.routePolylines,
                 searchRegion: workspace.searchRegion,
-                provider: workspace.mapProvider,
-                onSelectSearchResult: workspace.handleSearchResult,
                 onLongPress: workspace.handleLongPress
             )
         }
@@ -83,7 +81,7 @@ public struct TripWorkspaceView: View {
                 CorridorInspector(viewModel: workspace.corridorViewModel, corridorSearchModel: workspace.corridorSearchModel)
             }
             phaseDisclosure(.pointsOfInterest, icon: "star.circle") {
-                POIInspector(viewModel: workspace.poiViewModel)
+                POIInspector(workspace: workspace)
             }
             phaseDisclosure(.overnights, icon: "bed.double") {
                 DayPlannerInspector(viewModel: workspace.dayPlannerViewModel)

@@ -4,44 +4,41 @@ import RTPCore
 import RTPProviders
 
 /// The shared, reusable map surface used by phases 1–3: renders anchor/POI
-/// annotations and route polylines, supports searching for a place, and
-/// dropping a pin with a long press — all funnelled through simple callbacks
-/// so each phase's editor decides what "adding a point" means
-/// (docs/CONCEPT.md §1.3 P3, §2.8).
+/// annotations and route polylines, and supports dropping a pin with a long
+/// press — all funnelled through simple callbacks so each phase's editor
+/// decides what "adding a point" means (docs/CONCEPT.md §1.3 P3, §2.8).
+/// Text search now lives in each phase's own inspector field (Corridor,
+/// POI) instead of here, since a single shared map search couldn't apply
+/// per-phase rules (e.g. the 10 km absorption rule) before a point was
+/// picked.
 ///
 /// Note: tapping Apple Maps' own built-in POI icons (`Map(selection:)` with
 /// `MapFeature`) is intentionally not used here — `MapFeature` does not
 /// conform to `Hashable`/`Equatable` on macOS in this SDK, so it cannot be
-/// used in a target shared between iOS and macOS. Search + long-press cover
-/// "select any point interactively" on both platforms.
+/// used in a target shared between iOS and macOS. Long-press covers
+/// "select any point interactively" on both platforms; search is offered
+/// per-phase instead.
 public struct MapCanvasView: View {
     public var annotations: [MapCanvasAnnotation]
     public var routePolylines: [[Coordinate]]
     public var searchRegion: MapRegion
     public var onSelectAnnotation: (MapCanvasAnnotation) -> Void
-    public var onSelectSearchResult: (PlaceResult) -> Void
     public var onLongPress: (Coordinate) -> Void
 
-    @State private var searchViewModel: MapSearchViewModel
-    @State private var searchText: String = ""
     @State private var cameraPosition: MapCameraPosition
 
     public init(
         annotations: [MapCanvasAnnotation],
         routePolylines: [[Coordinate]] = [],
         searchRegion: MapRegion,
-        provider: any MapProvider,
         onSelectAnnotation: @escaping (MapCanvasAnnotation) -> Void = { _ in },
-        onSelectSearchResult: @escaping (PlaceResult) -> Void = { _ in },
         onLongPress: @escaping (Coordinate) -> Void = { _ in }
     ) {
         self.annotations = annotations
         self.routePolylines = routePolylines
         self.searchRegion = searchRegion
         self.onSelectAnnotation = onSelectAnnotation
-        self.onSelectSearchResult = onSelectSearchResult
         self.onLongPress = onLongPress
-        _searchViewModel = State(initialValue: MapSearchViewModel(provider: provider))
         _cameraPosition = State(initialValue: .region(
             MKCoordinateRegion(
                 center: searchRegion.center.clLocationCoordinate2D,
@@ -51,71 +48,7 @@ public struct MapCanvasView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            searchField
-            mapReader
-        }
-    }
-
-    private var searchField: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField("Search for a place", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .onChange(of: searchText) { _, newValue in
-                        searchViewModel.updateQuery(newValue, region: searchRegion)
-                    }
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                        searchViewModel.clear()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
-                }
-            }
-            .padding(8)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .padding(8)
-
-            if searchViewModel.isSearching {
-                ProgressView()
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            } else if let errorMessage = searchViewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            } else if !searchViewModel.results.isEmpty {
-                List(searchViewModel.results) { result in
-                    Button {
-                        onSelectSearchResult(result)
-                        searchText = ""
-                        searchViewModel.clear()
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text(result.title)
-                            if !result.subtitle.isEmpty {
-                                Text(result.subtitle)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                .listStyle(.plain)
-                .frame(maxHeight: 220)
-            }
-        }
+        mapReader
     }
 
     private var mapReader: some View {

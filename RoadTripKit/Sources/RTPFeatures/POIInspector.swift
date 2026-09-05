@@ -1,23 +1,58 @@
 import SwiftUI
 import RTPCore
+import RTPProviders
 import RTPRouting
 
 /// Phase 2 inspector: add fixed POIs with a dwell duration and category, and
 /// see the 10 km absorption rule apply to nearby Phase 1 waypoints
-/// (docs/CONCEPT.md §1.5 "Phase 2 — Points of interest", §2.5). Map
-/// interaction is routed through `TripWorkspaceModel`, which raises
-/// `pendingPOIPoint` for the workspace shell to present `AddPOISheet` for.
+/// (docs/CONCEPT.md §1.5 "Phase 2 — Points of interest", §2.5). Mirrors the
+/// Corridor inspector's own search field (rather than relying on the map's,
+/// which was removed as redundant) — picking a result raises
+/// `workspace.pendingPOIPoint`, the same path a map long-press uses, so the
+/// category/dwell-duration sheet still appears before it becomes a POI.
 /// Reachable at any time (P1) — nothing here is gated behind
 /// `trip.currentPhase`.
 public struct POIInspector: View {
-    var viewModel: POIEditorViewModel
+    var workspace: TripWorkspaceModel
+    @Bindable var poiSearchModel: POISearchModel
+    var viewModel: POIEditorViewModel { workspace.poiViewModel }
 
-    public init(viewModel: POIEditorViewModel) {
-        self.viewModel = viewModel
+    public init(workspace: TripWorkspaceModel) {
+        self.workspace = workspace
+        self.poiSearchModel = workspace.poiSearchModel
     }
 
     public var body: some View {
         Group {
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("Search for a POI, hotel, or address...", text: $poiSearchModel.query)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: poiSearchModel.query) { _, newValue in
+                        poiSearchModel.updateQuery(newValue)
+                    }
+
+                if !poiSearchModel.search.results.isEmpty {
+                    ForEach(poiSearchModel.search.results, id: \.id) { result in
+                        SearchResultRow(result: result) {
+                            selectSearchResult(result)
+                        }
+                    }
+                }
+
+                if poiSearchModel.search.isSearching {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Searching...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            Divider()
+
             if let absorption = viewModel.lastAbsorption {
                 HStack {
                     Label(
@@ -30,7 +65,7 @@ public struct POIInspector: View {
             }
 
             if viewModel.orderedMiddleAnchors.isEmpty {
-                Text("Search or long-press the map to add a POI.")
+                Text("Search above or long-press the map to add a POI.")
                     .foregroundStyle(.secondary)
             }
 
@@ -78,6 +113,19 @@ public struct POIInspector: View {
             }
             .disabled(viewModel.isRecalculating || viewModel.orderedAnchors.count < 2)
         }
+    }
+
+    // MARK: - Selection Handler
+
+    /// Routes a search pick through the same path as a map long-press
+    /// (`TripWorkspaceModel.handleSearchResult`), which raises
+    /// `pendingPOIPoint` for the workspace shell's `AddPOISheet` — the
+    /// active phase is already `.pointsOfInterest` whenever this inspector's
+    /// search field is visible, so it applies the 10 km absorption rule the
+    /// same way any other POI addition does.
+    private func selectSearchResult(_ result: PlaceResult) {
+        workspace.handleSearchResult(result)
+        poiSearchModel.resetAfterPick()
     }
 
     private var distanceText: String {
