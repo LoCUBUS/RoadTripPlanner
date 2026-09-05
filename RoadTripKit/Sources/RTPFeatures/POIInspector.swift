@@ -73,6 +73,15 @@ public struct POIInspector: View {
                 if anchor.kind == .poi {
                     POIRow(anchor: anchor, viewModel: viewModel)
                         .contextMenu {
+                            Button {
+                                viewModel.setOvernightCandidate(!anchor.isOvernightCandidate, for: anchor)
+                            } label: {
+                                if anchor.isOvernightCandidate {
+                                    Label("Remove Overnight Candidate", systemImage: "bed.double.slash")
+                                } else {
+                                    Label("Use as Overnight Candidate", systemImage: "bed.double")
+                                }
+                            }
                             Button(role: .destructive) {
                                 viewModel.removePOI(anchor)
                             } label: {
@@ -147,7 +156,14 @@ private struct POIRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label(anchor.title, systemImage: MapCanvasAnnotation.Style.poi.systemImage)
+            HStack {
+                Label(anchor.title, systemImage: MapCanvasAnnotation.Style.poi.systemImage)
+                if anchor.isOvernightCandidate {
+                    Image(systemName: "bed.double.fill")
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("Overnight candidate")
+                }
+            }
 
             HStack {
                 Picker(
@@ -186,11 +202,12 @@ private struct POIRow: View {
 /// bound to `TripWorkspaceModel.pendingPOIPoint`.
 struct AddPOISheet: View {
     let point: PendingMapPoint
-    let onAdd: (POICategory?, Int) -> Void
+    let onAdd: (POICategory?, Int, Bool) -> Void
     let onCancel: () -> Void
 
     @State private var category: POICategory = .sight
     @State private var dwellMinutes: Int = 45
+    @State private var useAsOvernight = false
 
     var body: some View {
         NavigationStack {
@@ -205,8 +222,20 @@ struct AddPOISheet: View {
                         }
                     }
                 }
-                Section("Dwell Time") {
+                Section {
                     Stepper("\(dwellMinutes) min", value: $dwellMinutes, in: 0...480, step: 15)
+                        .disabled(useAsOvernight)
+                } header: {
+                    Text("Dwell Time")
+                } footer: {
+                    if useAsOvernight {
+                        Text("Overnight candidates don't add dwell time \u{2014} the stay itself is the overnight.")
+                    }
+                }
+                Section {
+                    Toggle("Use as overnight candidate", isOn: $useAsOvernight)
+                } footer: {
+                    Text("If this fits a day's time budget in Phase 3, it automatically becomes that day's overnight stay (undoable).")
                 }
             }
             .navigationTitle("Add POI")
@@ -215,10 +244,15 @@ struct AddPOISheet: View {
                     Button("Cancel", action: onCancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { onAdd(category, dwellMinutes) }
+                    Button("Add") { onAdd(category, useAsOvernight ? 0 : dwellMinutes, useAsOvernight) }
                 }
             }
         }
-        .frame(minWidth: 360, minHeight: 320)
+        .frame(minWidth: 360, minHeight: 380)
+        .onChange(of: useAsOvernight) { _, isOvernight in
+            if isOvernight, !category.isLodging {
+                category = .hotel
+            }
+        }
     }
 }

@@ -23,13 +23,14 @@ public struct TripWorkspaceView: View {
         .sheet(item: $workspace.pendingPOIPoint) { point in
             AddPOISheet(
                 point: point,
-                onAdd: { category, dwellMinutes in
+                onAdd: { category, dwellMinutes, isOvernightCandidate in
                     workspace.poiViewModel.addPOI(
                         title: point.title,
                         coordinate: point.coordinate,
                         mapItemIdentifier: point.mapItemIdentifier,
                         category: category,
-                        dwellDuration: TimeInterval(dwellMinutes * 60)
+                        dwellDuration: TimeInterval(dwellMinutes * 60),
+                        isOvernightCandidate: isOvernightCandidate
                     )
                     workspace.pendingPOIPoint = nil
                 },
@@ -66,11 +67,36 @@ public struct TripWorkspaceView: View {
             if !workspace.reviewBanners.isEmpty {
                 reviewBanner
             }
+            if let notice = workspace.dayPlannerViewModel.lastAutoPromotedOvernight {
+                autoPromotedOvernightBanner(notice)
+            }
             MapCanvasView(
                 annotations: workspace.mapAnnotations,
                 routePolylines: workspace.routePolylines,
                 searchRegion: workspace.searchRegion,
-                onLongPress: workspace.handleLongPress
+                mapProvider: workspace.mapProvider,
+                featureSelectionEnabled: workspace.activePhase == .pointsOfInterest,
+                onLongPress: workspace.handleLongPress,
+                onAddFeatureAsPOI: { details in
+                    workspace.poiViewModel.addPOI(
+                        title: details.title,
+                        coordinate: details.coordinate,
+                        mapItemIdentifier: details.mapItemIdentifier,
+                        category: details.category,
+                        dwellDuration: 45 * 60,
+                        isOvernightCandidate: false
+                    )
+                },
+                onAddFeatureAsOvernight: { details in
+                    workspace.poiViewModel.addPOI(
+                        title: details.title,
+                        coordinate: details.coordinate,
+                        mapItemIdentifier: details.mapItemIdentifier,
+                        category: details.category?.isLodging == true ? details.category : .hotel,
+                        dwellDuration: 0,
+                        isOvernightCandidate: true
+                    )
+                }
             )
         }
     }
@@ -119,6 +145,29 @@ public struct TripWorkspaceView: View {
                 }
             }
         }
+    }
+
+    /// Shown after `DayPlannerViewModel` automatically closes a day with a
+    /// Phase-2 overnight candidate that fit the time budget's tolerance
+    /// (docs/CONCEPT.md §2.6 "Overnight candidates") — undoable, since the
+    /// promotion happens without an explicit user action.
+    private func autoPromotedOvernightBanner(_ notice: AutoPromotedOvernightNotice) -> some View {
+        HStack(spacing: 8) {
+            Label("\u{201C}\(notice.anchorTitle)\u{201D} was automatically used as tonight's overnight stay", systemImage: "bed.double.fill")
+                .foregroundStyle(.blue)
+                .lineLimit(2)
+            Spacer(minLength: 8)
+            Button("Undo") {
+                workspace.dayPlannerViewModel.undoAutoPromotedOvernight()
+            }
+            Button("Dismiss") {
+                workspace.dayPlannerViewModel.dismissAutoPromotedOvernightNotice()
+            }
+        }
+        .font(.footnote)
+        .padding(10)
+        .background(.thinMaterial)
+        .accessibilityElement(children: .contain)
     }
 
     /// A single compact row rather than one banner per flagged phase: an

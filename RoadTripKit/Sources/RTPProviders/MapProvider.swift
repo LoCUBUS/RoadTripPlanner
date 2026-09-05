@@ -42,6 +42,38 @@ public struct PlaceResult: Sendable, Equatable, Identifiable {
     }
 }
 
+/// Enriched information about a place tapped directly on the map (a
+/// built-in Apple Maps point of interest). Provider-agnostic, kept separate
+/// from `PlaceResult` since it's resolved from a map tap rather than a text
+/// search (docs/CONCEPT.md §2.3, §2.5 "Selecting a map POI").
+public struct PlaceDetails: Sendable, Equatable {
+    public var title: String
+    public var coordinate: Coordinate
+    public var category: POICategory?
+    public var address: String?
+    public var phoneNumber: String?
+    public var url: URL?
+    public var mapItemIdentifier: String?
+
+    public init(
+        title: String,
+        coordinate: Coordinate,
+        category: POICategory? = nil,
+        address: String? = nil,
+        phoneNumber: String? = nil,
+        url: URL? = nil,
+        mapItemIdentifier: String? = nil
+    ) {
+        self.title = title
+        self.coordinate = coordinate
+        self.category = category
+        self.address = address
+        self.phoneNumber = phoneNumber
+        self.url = url
+        self.mapItemIdentifier = mapItemIdentifier
+    }
+}
+
 /// One leg of a driving step, used only to distribute travel time along a
 /// route by distance share (docs/CONCEPT.md §2.6) — MKRoute exposes no
 /// per-step duration, only per-step distance.
@@ -90,4 +122,9 @@ public protocol MapProvider: Sendable {
     func reverseGeocode(_ coordinate: Coordinate) async throws -> PlaceResult
     func directions(from: Coordinate, to: Coordinate) async throws -> RouteResult
     func externalNavigationURL(for anchors: [Anchor]) -> URL
+    /// Resolves a tapped built-in map feature (identified only by its title
+    /// and approximate coordinate — macOS exposes no direct feature→map-item
+    /// API, see docs/CONCEPT.md §2.9 risks) into richer place info by
+    /// searching near that point and matching the closest result.
+    func details(forFeatureTitled title: String, near coordinate: Coordinate) async throws -> PlaceDetails
 }

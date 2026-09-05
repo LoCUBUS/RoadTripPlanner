@@ -4,6 +4,15 @@ import RTPCore
 import RTPProviders
 import RTPRouting
 
+/// A banner notice shown after `DayPlannerViewModel` automatically promotes
+/// a Phase-2 overnight candidate to a day's lodging, so the view can offer
+/// an undo (docs/CONCEPT.md §2.6 "Overnight candidates").
+public struct AutoPromotedOvernightNotice: Identifiable, Equatable, Sendable {
+    public let id = UUID()
+    public let dayID: UUID
+    public let anchorTitle: String
+}
+
 /// Drives Phase 3's day planner: opening/closing days against a per-day
 /// travel-time budget, searching for lodging around the computed time-up
 /// point, resolving dwell-time overruns, and keeping route legs in sync via
@@ -29,6 +38,16 @@ public final class DayPlannerViewModel {
     /// so the view can render the time-up marker, the dwell-overrun
     /// resolution sheet, or a "reached destination" state.
     public private(set) var lastSegmentation: DaySegmentationResult?
+
+    /// Set whenever a day was just automatically closed with a Phase-2
+    /// overnight candidate, so the view can show an undoable banner.
+    /// Cleared by `dismissAutoPromotedOvernightNotice()`,
+    /// `undoAutoPromotedOvernight()`, or the next day transition.
+    public private(set) var lastAutoPromotedOvernight: AutoPromotedOvernightNotice?
+    /// Overnight-candidate anchors the user has explicitly rejected for the
+    /// currently open day (via undo), so re-segmenting that same day doesn't
+    /// immediately re-promote them.
+    private var rejectedOvernightCandidateAnchorIDs: Set<UUID> = []
 
     public var lodgingCategoryFilterEnabled = true
 
@@ -61,30 +80,34 @@ public final class DayPlannerViewModel {
         lastSegmentation?.containedAnchorIDs.last ?? day.startAnchorID
     }
 
-    /// Opens the next day with `budget` and immediately segments it.
+    /// Opens the next day with `budget` and immediately segments it,
+    /// automatically promoting a fitting Phase-2 overnight candidate if one
+    /// exists.
     @discardableResult
     public func startNextDay(budget: TimeInterval) -> TripDay? {
+        rejectedOvernightCandidateAnchorIDs = []
+        lastAutoPromotedOvernight = nil
         guard let day = trip.openNextDay(budget: budget) else { return nil }
-        lastSegmentation = trip.recomputeTimeUpPoint(for: day)
+        lastSegmentation = recomputeAndCheckPromotion(for: day)
         return day
     }
 
     /// Updates a day's budget and re-segments it.
     public func updateBudget(day: TripDay, budget: TimeInterval) {
         trip.updateBudget(day: day, budget: budget)
-        lastSegmentation = trip.recomputeTimeUpPoint(for: day)
+        lastSegmentation = recomputeAndCheckPromotion(for: day)
     }
 
     /// Dwell-overrun resolution (a): approve overshooting the budget for
     /// `anchorID`'s full dwell time, then re-segment.
     public func resolveOvershoot(day: TripDay, anchorID: UUID) {
-        lastSegmentation = trip.recomputeTimeUpPoint(for: day, overshootAnchorIDs: [anchorID])
+        lastSegmentation = recomputeAndCheckPromotion(for: day, overshootAnchorIDs: [anchorID])
     }
 
     /// Dwell-overrun resolution (b): end the day before `anchorID`, then
     /// re-segment.
     public func resolveEndDayBeforeAnchor(day: TripDay, anchorID: UUID) {
-        lastSegmentation = trip.recomputeTimeUpPoint(for: day, skipDwellAnchorIDs: [anchorID])
+        lastSegmentation = recomputeAndCheckPromotion(for: day, skipDwellAnchorIDs: [anchorID])
     }
 
     /// Dwell-overrun resolution (c): shorten the POI's dwell duration to fit
@@ -93,7 +116,7 @@ public final class DayPlannerViewModel {
         guard let anchor = trip.anchors.first(where: { $0.id == anchorID }) else { return }
         anchor.dwellDuration = Swift.max(0, newDwellDuration)
         trip.updatedAt = .now
-        lastSegmentation = trip.recomputeTimeUpPoint(for: day)
+        lastSegmentation = recomputeAndCheckPromotion(for: day)
     }
 
     /// Widens the lodging search radius for `day`, clamped to
@@ -151,6 +174,8 @@ public final class DayPlannerViewModel {
     }
 
     public func reopenDay(_ day: TripDay) {
+        rejectedOvernightCandidateAnchorIDs = []
+        lastAutoPromotedOvernight = nil
         trip.reopenDay(day)
         lastSegmentation = nil
     }
@@ -158,8 +183,40 @@ public final class DayPlannerViewModel {
     /// Removes `day`'s lodging, merging it with the following day, then
     /// recalculates and re-segments.
     public func removeLodging(for day: TripDay) {
+        lastAutoPromotedOvernight = nil
         trip.removeLodging(for: day)
         Task { await recalculateRoute() }
+    }
+
+    /// Undoes an automatic overnight-candidate promotion: reverts the
+    /// lodging anchor back to a `.poi` overnight candidate, reopens the day,
+    /// excludes that candidate from future auto-matches on this day, and
+    /// re-segments (which may auto-promote a different, less-close
+    /// candidate if one exists).
+    public func undoAutoPromotedOvernight() {
+        guard let notice = lastAutoPromotedOvernight,
+              let day = days.first(where: { $0.id == notice.dayID })
+        else { return }
+        if let lodgingID = day.endAnchorID {
+            rejectedOvernightCandidateAnchorIDs.insert(lodgingID)
+        }
+        lastAutoPromotedOvernight = nil
+        trip.removeLodging(for: day)
+        lastSegmentation = recomputeAndCheckPromotion(for: day)
+    }
+
+    /// Dismisses the auto-promotion banner without undoing anything.
+    public func dismissAutoPromotedOvernightNotice() {
+        lastAutoPromotedOvernight = nil
+    }
+
+    /// Re-checks the currently open day for a fitting overnight candidate —
+    /// call after changing `trip.overnightToleranceFraction` so a widened
+    /// tolerance can immediately pick up a candidate that didn't qualify
+    /// before.
+    public func refreshOvernightPromotion() {
+        guard let day = openDay else { return }
+        lastSegmentation = recomputeAndCheckPromotion(for: day)
     }
 
     public func recalculateRoute() async {
@@ -172,7 +229,26 @@ public final class DayPlannerViewModel {
             recalculationError = "Some legs could not be routed and use a straight-line estimate."
         }
         if let day = openDay {
-            lastSegmentation = trip.recomputeTimeUpPoint(for: day)
+            lastSegmentation = recomputeAndCheckPromotion(for: day)
         }
+    }
+
+    /// Re-segments `day` and, if the outcome is `.reachedBudget` (i.e. the
+    /// day would otherwise ask the user to search for lodging), checks
+    /// whether a Phase-2 overnight candidate already fits the budget's
+    /// tolerance and — if so — automatically promotes it and closes the
+    /// day there instead, surfacing an undoable notice.
+    private func recomputeAndCheckPromotion(
+        for day: TripDay,
+        overshootAnchorIDs: Set<UUID> = [],
+        skipDwellAnchorIDs: Set<UUID> = []
+    ) -> DaySegmentationResult? {
+        let result = trip.recomputeTimeUpPoint(for: day, overshootAnchorIDs: overshootAnchorIDs, skipDwellAnchorIDs: skipDwellAnchorIDs)
+        guard case .reachedBudget = result?.outcome, day.endAnchorID == nil else { return result }
+        guard let match = trip.bestOvernightCandidate(for: day, excludingAnchorIDs: rejectedOvernightCandidateAnchorIDs),
+              let anchor = trip.promoteOvernightCandidate(anchorID: match.anchorID, for: day)
+        else { return result }
+        lastAutoPromotedOvernight = AutoPromotedOvernightNotice(dayID: day.id, anchorTitle: anchor.title)
+        return result
     }
 }

@@ -57,4 +57,38 @@ struct StubMapProviderTests {
             _ = try await provider.reverseGeocode(Coordinate())
         }
     }
+
+    @Test("Feature details returns the scripted result for the tapped title")
+    func featureDetailsScripted() async throws {
+        let provider = StubMapProvider()
+        let expected = PlaceDetails(
+            title: "Nuremberg Castle",
+            coordinate: Coordinate(latitude: 49.4579, longitude: 11.0775),
+            category: .sight,
+            address: "Auf der Burg 13, 90403 N\u{00fc}rnberg",
+            phoneNumber: "+49 911 2446590",
+            url: URL(string: "https://www.kaiserburg-nuernberg.de")
+        )
+        provider.featureDetailsByTitle["Nuremberg Castle"] = expected
+
+        let result = try await provider.details(forFeatureTitled: "Nuremberg Castle", near: expected.coordinate)
+        #expect(result == expected)
+    }
+
+    @Test("Feature details without a scripted result throws noResults")
+    func featureDetailsMissing() async {
+        let provider = StubMapProvider()
+        await #expect(throws: MapProviderError.noResults) {
+            _ = try await provider.details(forFeatureTitled: "Unknown Place", near: Coordinate())
+        }
+    }
+
+    @Test("Feature details can be scripted to throw, e.g. to simulate being offline")
+    func featureDetailsScriptedFailure() async {
+        let provider = StubMapProvider()
+        provider.featureDetailsShouldThrow = true
+        await #expect(throws: MapProviderError.requestFailed("stubbed failure")) {
+            _ = try await provider.details(forFeatureTitled: "Anything", near: Coordinate())
+        }
+    }
 }

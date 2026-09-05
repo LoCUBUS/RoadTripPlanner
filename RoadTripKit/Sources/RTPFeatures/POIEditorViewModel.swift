@@ -56,14 +56,16 @@ public final class POIEditorViewModel {
         coordinate: Coordinate,
         mapItemIdentifier: String? = nil,
         category: POICategory? = nil,
-        dwellDuration: TimeInterval = 45 * 60
+        dwellDuration: TimeInterval = 45 * 60,
+        isOvernightCandidate: Bool = false
     ) -> Anchor {
         let result = trip.addPOI(
             title: title,
             coordinate: coordinate,
             mapItemIdentifier: mapItemIdentifier,
             category: category,
-            dwellDuration: dwellDuration
+            dwellDuration: dwellDuration,
+            isOvernightCandidate: isOvernightCandidate
         )
         lastAdditionResult = result
         if let waypoint = result.absorbedWaypoint {
@@ -104,6 +106,23 @@ public final class POIEditorViewModel {
     public func setCategory(_ category: POICategory?, for anchor: Anchor) {
         anchor.category = category
         trip.updatedAt = .now
+    }
+
+    /// Toggles whether a POI is a Phase-2 overnight candidate
+    /// (docs/CONCEPT.md §2.6 "Overnight candidates"). Only meaningful while
+    /// the anchor is still `.poi` — once Phase 3 promotes it to `.lodging`,
+    /// removing that lodging (`DayPlannerViewModel.removeLodging`) reverts
+    /// it back to `.poi` with the flag intact.
+    public func setOvernightCandidate(_ isOvernightCandidate: Bool, for anchor: Anchor) {
+        anchor.isOvernightCandidate = isOvernightCandidate
+        if isOvernightCandidate {
+            anchor.dwellDuration = 0
+            if anchor.category?.isLodging != true {
+                anchor.category = .hotel
+            }
+        }
+        trip.updatedAt = .now
+        trip.markNeedsReview(after: .pointsOfInterest)
     }
 
     public func moveMiddleAnchors(fromOffsets: IndexSet, toOffset: Int) {
