@@ -1,6 +1,6 @@
 # RoadTripPlanner — Concept & Implementation Plan
 
-Multiplatform SwiftUI app (iOS 26 / macOS 26) for planning road trips in five phases,
+Single-platform SwiftUI app (macOS 26) for planning road trips in five phases,
 built on Apple Maps (MapKit) as the only provider in v1, English-only UI.
 
 ---
@@ -303,8 +303,9 @@ App/                       @main app, SwiftData container, navigation shell, Str
 `RTPRouting` is deliberately free of MapKit so the segmentation logic is unit-testable with
 synthetic legs — this is the highest-risk logic in the product.
 
-UI shell: `NavigationSplitView` (trip list ▸ trip detail) with a persistent map canvas and a
-phase-segmented inspector — the same layout adapts to iPhone as a sheet-over-map.
+UI shell: a persistent three-column `NavigationSplitView` — a collapsible trip
+list/management sidebar, the map canvas (largest column), and a phase-segmented
+inspector on the right. macOS-only for v1; no iPhone/iPad adaptation.
 
 **Project generation**: commit an XcodeGen `project.yml` so the `.xcodeproj` is reproducible
 and reviewable from the CLI instead of a hand-edited `project.pbxproj`.

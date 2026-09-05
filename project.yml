@@ -2,7 +2,6 @@ name: RoadTripPlanner
 options:
   bundleIdPrefix: com.locubus.roadtripplanner
   deploymentTarget:
-    iOS: "26.0"
     macOS: "26.0"
   createIntermediateGroups: true
 
@@ -20,42 +19,6 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
 
 targets:
-  RoadTripPlanner-iOS:
-    type: application
-    platform: iOS
-    deploymentTarget: "26.0"
-    sources:
-      - path: App/Sources/RoadTripPlanner
-      - path: App/Resources
-    dependencies:
-      - package: RoadTripKit
-        product: RTPCore
-      - package: RoadTripKit
-        product: RTPRouting
-      - package: RoadTripKit
-        product: RTPProviders
-      - package: RoadTripKit
-        product: RTPFeatures
-    info:
-      path: App/Info-iOS.plist
-      properties:
-        CFBundleDisplayName: RoadTripPlanner
-        UILaunchScreen: {}
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        NSLocationWhenInUseUsageDescription: "RoadTripPlanner uses your location to centre the map and start navigation from where you are."
-        NSPhotoLibraryUsageDescription: "RoadTripPlanner lets you pick photos to place on your trip map. Only the photos you choose are used."
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.locubus.roadtripplanner.ios
-        PRODUCT_NAME: RoadTripPlanner
-        TARGETED_DEVICE_FAMILY: "1,2"
-        GENERATE_INFOPLIST_FILE: YES
-        ENABLE_PREVIEWS: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-
   RoadTripPlanner-macOS:
     type: application
     platform: macOS
@@ -92,14 +55,6 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
 schemes:
-  RoadTripPlanner-iOS:
-    build:
-      targets:
-        RoadTripPlanner-iOS: all
-    run:
-      config: Debug
-    test:
-      config: Debug
   RoadTripPlanner-macOS:
     build:
       targets:

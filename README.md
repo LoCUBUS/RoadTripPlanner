@@ -1,6 +1,6 @@
 # RoadTripPlanner
 
-A road trip planning app for iOS and macOS. Plan a trip through five phases —
+A road trip planning app for macOS. Plan a trip through five phases —
 coarse corridor, points of interest, overnight stays, a day-by-day summary
 with Apple Maps hand-off, and a travel photo journal — while being able to
 freely revisit any earlier phase at any time.
@@ -23,6 +23,11 @@ algorithms for absorption, day segmentation, and Apple Maps hand-off).
 
 Editing an earlier phase never deletes downstream data — it flags later
 phases with a dismissible "may be out of date — Recalculate" banner.
+
+The app is a single macOS target with a persistent three-column layout: a
+collapsible trip list/management sidebar, the map (largest column), and a
+phase inspector on the right — the map stays visible while you work through
+any phase.
 
 v1 uses **Apple Maps only** as the map/routing provider (MapKit); the
 domain layer is provider-agnostic (`MapProvider` protocol) so Google Maps/
@@ -65,8 +70,6 @@ docs/CONCEPT.md          Product concept: Define/Refine, domain model, algorithm
 ```sh
 cd RoadTripKit && swift build && swift test   # core logic, fast, no Xcode project needed
 xcodebuild -project RoadTripPlanner.xcodeproj -scheme RoadTripPlanner-macOS build
-xcodebuild -project RoadTripPlanner.xcodeproj -scheme RoadTripPlanner-iOS \
-  -destination 'platform=iOS Simulator,name=<a simulator you have installed>' build
 ```
 
 `RoadTripKit`'s test suite (`swift test`) covers the domain layer end to

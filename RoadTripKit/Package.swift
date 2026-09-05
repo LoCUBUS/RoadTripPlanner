@@ -5,7 +5,6 @@ let package = Package(
     name: "RoadTripKit",
     defaultLocalization: "en",
     platforms: [
-        .iOS(.v26),
         .macOS(.v26)
     ],
     products: [

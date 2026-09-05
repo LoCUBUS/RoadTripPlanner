@@ -19,6 +19,8 @@ struct RoadTripPlannerApp: App {
         WindowGroup {
             TripListView()
         }
+        .defaultSize(width: 1440, height: 900)
+        .windowResizability(.contentMinSize)
         .modelContainer(container)
     }
 }
