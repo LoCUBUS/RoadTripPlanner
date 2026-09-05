@@ -126,12 +126,23 @@ public extension Trip {
     /// anchor, and the following `TripDay` is deleted with later indices
     /// shifted down. If there is no following day, this day is simply
     /// reopened. Call `recomputeTimeUpPoint(for:)` afterwards to re-segment.
+    ///
+    /// If the lodging was originally a Phase-2 overnight candidate
+    /// (`isOvernightCandidate`), it reverts to a plain `.poi` anchor instead
+    /// of being deleted outright — the user chose it deliberately in Phase
+    /// 2, and undoing its automatic promotion shouldn't lose it from the
+    /// route entirely.
     func removeLodging(for day: TripDay) {
         guard let lodgingID = day.endAnchorID,
-              anchors.first(where: { $0.id == lodgingID })?.kind == .lodging
+              let lodging = anchors.first(where: { $0.id == lodgingID }),
+              lodging.kind == .lodging
         else { return }
 
-        anchors.removeAll { $0.id == lodgingID }
+        if lodging.isOvernightCandidate {
+            lodging.kind = .poi
+        } else {
+            anchors.removeAll { $0.id == lodgingID }
+        }
         day.endAnchorID = nil
         day.timeUpPoint = nil
 

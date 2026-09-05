@@ -139,6 +139,127 @@ struct DayPlannerViewModelTests {
         _ = start
     }
 
+    /// A Munich → Overnight candidate (2h away, flagged) → Berlin corridor
+    /// with legs already resolved, for exercising Phase 2→3 auto-promotion.
+    private func corridorTripWithOvernightCandidate(provider: StubMapProvider) async -> (trip: Trip, candidate: Anchor) {
+        let trip = Trip(name: "Test")
+        trip.setStart(title: "Munich", coordinate: munich)
+        let candidateCoordinate = Coordinate(latitude: 49.0, longitude: 11.6)
+        let candidate = trip.addPOI(title: "Lakeside Inn", coordinate: candidateCoordinate, category: .hotel, dwellDuration: 0, isOvernightCandidate: true).poi
+        trip.setDestination(title: "Berlin", coordinate: berlin)
+        provider.routesByKey[StubMapProvider.routeKey(from: munich, to: candidateCoordinate)] = RouteResult(distanceMeters: 200_000, expectedTravelTime: 2 * 3600, polyline: [munich, candidateCoordinate])
+        provider.routesByKey[StubMapProvider.routeKey(from: candidateCoordinate, to: berlin)] = RouteResult(distanceMeters: 300_000, expectedTravelTime: 3 * 3600, polyline: [candidateCoordinate, berlin])
+        let coordinator = RouteCoordinator(provider: provider, configuration: fastConfiguration())
+        _ = await RTPFeaturesTestSupport.recalculate(trip: trip, using: coordinator)
+        return (trip, candidate)
+    }
+
+    @Test("Starting a day auto-promotes a Phase-2 overnight candidate within tolerance and surfaces a notice")
+    func startNextDayAutoPromotesOvernightCandidate() async {
+        let provider = StubMapProvider()
+        let (trip, candidate) = await corridorTripWithOvernightCandidate(provider: provider)
+        let viewModel = DayPlannerViewModel(trip: trip, routeCoordinator: RouteCoordinator(provider: provider, configuration: fastConfiguration()), mapProvider: provider)
+
+        // Candidate is reached at 2h; a 1.9h budget is within the default ±20% tolerance.
+        let day = viewModel.startNextDay(budget: 1.9 * 3600)
+
+        #expect(day?.isClosed == true)
+        #expect(day?.endAnchorID == candidate.id)
+        #expect(candidate.kind == .lodging)
+        #expect(viewModel.lastAutoPromotedOvernight?.anchorTitle == "Lakeside Inn")
+        #expect(viewModel.lastAutoPromotedOvernight?.dayID == day?.id)
+    }
+
+    @Test("Starting a day does not promote a candidate outside tolerance")
+    func startNextDayDoesNotPromoteOutOfToleranceCandidate() async {
+        let provider = StubMapProvider()
+        let (trip, candidate) = await corridorTripWithOvernightCandidate(provider: provider)
+        let viewModel = DayPlannerViewModel(trip: trip, routeCoordinator: RouteCoordinator(provider: provider, configuration: fastConfiguration()), mapProvider: provider)
+
+        // Candidate reached at 2h; a 1h budget puts it far outside tolerance.
+        let day = viewModel.startNextDay(budget: 1 * 3600)
+
+        #expect(day?.isClosed == false)
+        #expect(candidate.kind == .poi)
+        #expect(viewModel.lastAutoPromotedOvernight == nil)
+    }
+
+    @Test("Undoing an auto-promoted overnight reverts the anchor and excludes it from re-matching")
+    func undoAutoPromotedOvernightRevertsAndExcludes() async {
+        let provider = StubMapProvider()
+        let (trip, candidate) = await corridorTripWithOvernightCandidate(provider: provider)
+        let viewModel = DayPlannerViewModel(trip: trip, routeCoordinator: RouteCoordinator(provider: provider, configuration: fastConfiguration()), mapProvider: provider)
+        guard let day = viewModel.startNextDay(budget: 1.9 * 3600) else {
+            Issue.record("Expected an open day")
+            return
+        }
+        #expect(viewModel.lastAutoPromotedOvernight != nil)
+
+        viewModel.undoAutoPromotedOvernight()
+
+        #expect(viewModel.lastAutoPromotedOvernight == nil)
+        #expect(candidate.kind == .poi)
+        #expect(trip.anchors.contains { $0.id == candidate.id })
+        #expect(day.isClosed == false) // re-segmenting finds no other candidate to promote
+    }
+
+    @Test("Dismissing the auto-promotion notice keeps the promotion but clears the banner")
+    func dismissAutoPromotedOvernightNoticeKeepsPromotion() async {
+        let provider = StubMapProvider()
+        let (trip, candidate) = await corridorTripWithOvernightCandidate(provider: provider)
+        let viewModel = DayPlannerViewModel(trip: trip, routeCoordinator: RouteCoordinator(provider: provider, configuration: fastConfiguration()), mapProvider: provider)
+        guard let day = viewModel.startNextDay(budget: 1.9 * 3600) else {
+            Issue.record("Expected an open day")
+            return
+        }
+
+        viewModel.dismissAutoPromotedOvernightNotice()
+
+        #expect(viewModel.lastAutoPromotedOvernight == nil)
+        #expect(candidate.kind == .lodging)
+        #expect(day.isClosed == true)
+    }
+
+    @Test("Widening the trip's overnight tolerance and refreshing promotes a previously out-of-range candidate")
+    func refreshOvernightPromotionPicksUpWidenedTolerance() async {
+        let provider = StubMapProvider()
+        let (trip, candidate) = await corridorTripWithOvernightCandidate(provider: provider)
+        let viewModel = DayPlannerViewModel(trip: trip, routeCoordinator: RouteCoordinator(provider: provider, configuration: fastConfiguration()), mapProvider: provider)
+        // 1.4h budget vs. a 2h candidate is +43% over — outside the default ±20% tolerance.
+        guard let day = viewModel.startNextDay(budget: 1.4 * 3600) else {
+            Issue.record("Expected an open day")
+            return
+        }
+        #expect(viewModel.lastAutoPromotedOvernight == nil)
+        #expect(candidate.kind == .poi)
+
+        trip.overnightToleranceFraction = 0.5
+        viewModel.refreshOvernightPromotion()
+
+        #expect(candidate.kind == .lodging)
+        #expect(day.endAnchorID == candidate.id)
+        #expect(viewModel.lastAutoPromotedOvernight?.anchorTitle == "Lakeside Inn")
+    }
+
+    @Test("Reopening a day clears the auto-promotion notice and rejection set")
+    func reopeningDayClearsNoticeAndRejections() async {
+        let provider = StubMapProvider()
+        let (trip, candidate) = await corridorTripWithOvernightCandidate(provider: provider)
+        let viewModel = DayPlannerViewModel(trip: trip, routeCoordinator: RouteCoordinator(provider: provider, configuration: fastConfiguration()), mapProvider: provider)
+        guard let day = viewModel.startNextDay(budget: 1.9 * 3600) else {
+            Issue.record("Expected an open day")
+            return
+        }
+        viewModel.undoAutoPromotedOvernight() // rejects the candidate for this day
+
+        viewModel.reopenDay(day)
+        viewModel.refreshOvernightPromotion()
+
+        // After reopening, the rejection set was cleared, so the same candidate can be re-promoted.
+        #expect(candidate.kind == .lodging)
+        #expect(viewModel.lastAutoPromotedOvernight?.anchorTitle == "Lakeside Inn")
+    }
+
     @Test("removeLodging merges the day with the following one and clears the lodging anchor")
     func removeLodgingMergesDays() async {
         let provider = StubMapProvider()

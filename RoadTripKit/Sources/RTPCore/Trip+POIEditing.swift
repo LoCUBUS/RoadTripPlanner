@@ -28,6 +28,7 @@ public extension Trip {
         mapItemIdentifier: String? = nil,
         category: POICategory? = nil,
         dwellDuration: TimeInterval = 45 * 60,
+        isOvernightCandidate: Bool = false,
         absorptionRadiusMeters: Double = 10_000
     ) -> POIAdditionResult {
         let poi = Anchor(
@@ -36,7 +37,8 @@ public extension Trip {
             coordinate: coordinate,
             mapItemIdentifier: mapItemIdentifier,
             category: category,
-            dwellDuration: dwellDuration
+            dwellDuration: dwellDuration,
+            isOvernightCandidate: isOvernightCandidate
         )
 
         let nearestAbsorbable = anchors

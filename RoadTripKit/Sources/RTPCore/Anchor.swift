@@ -34,6 +34,16 @@ public final class Anchor {
     /// How long the user plans to stay (Phase 2). Zero for non-POI anchors.
     public var dwellDuration: TimeInterval = 0
 
+    /// Marks a Phase-2 `.poi` anchor as a candidate the user has already
+    /// picked for an overnight stay (docs/CONCEPT.md §1.5 "Phase 2 — Points
+    /// of interest"). Phase 3 automatically promotes it to `.lodging` (in
+    /// place, keeping its position in the chain) if it falls within the
+    /// trip's overnight tolerance of a day's time budget — see
+    /// `Trip.bestOvernightCandidate(for:)`. Left `true` even after
+    /// promotion, so `Trip.removeLodging(for:)` knows to revert the anchor
+    /// back to `.poi` rather than deleting it outright.
+    public var isOvernightCandidate: Bool = false
+
     // Phase 4 state
     public var isVisited: Bool = false
     public var comment: String?
@@ -50,7 +60,8 @@ public final class Anchor {
         coordinate: Coordinate = Coordinate(),
         mapItemIdentifier: String? = nil,
         category: POICategory? = nil,
-        dwellDuration: TimeInterval = 0
+        dwellDuration: TimeInterval = 0,
+        isOvernightCandidate: Bool = false
     ) {
         self.id = id
         self.order = order
@@ -62,6 +73,7 @@ public final class Anchor {
         self.mapItemIdentifier = mapItemIdentifier
         self.categoryRawValue = category?.rawValue
         self.dwellDuration = dwellDuration
+        self.isOvernightCandidate = isOvernightCandidate
     }
 
     public var kind: AnchorKind {

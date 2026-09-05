@@ -103,6 +103,51 @@ public final class AppleMapsProvider: MapProvider, @unchecked Sendable {
         }
     }
 
+    /// Resolves a tapped built-in map feature into richer place info by
+    /// running an `MKLocalSearch` for `title` in a tight region around
+    /// `coordinate` and matching the closest result — macOS exposes no
+    /// direct feature→map-item API (`MKMapItemRequest`/`MKMapItemIdentifier`
+    /// are unavailable on macOS; see docs/CONCEPT.md §2.9 risks).
+    public func details(forFeatureTitled title: String, near coordinate: Coordinate) async throws -> PlaceDetails {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = title
+        request.resultTypes = .pointOfInterest
+        request.region = MKCoordinateRegion(
+            center: coordinate.clLocationCoordinate2D,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
+        let search = MKLocalSearch(request: request)
+        do {
+            let response = try await search.start()
+            guard let match = Self.closestMapItem(to: coordinate, in: response.mapItems) else {
+                throw MapProviderError.noResults
+            }
+            return Self.placeDetails(from: match)
+        } catch let error as MapProviderError {
+            throw error
+        } catch {
+            throw MapProviderError.requestFailed(error.localizedDescription)
+        }
+    }
+
+    private static func closestMapItem(to coordinate: Coordinate, in items: [MKMapItem]) -> MKMapItem? {
+        items.min { lhs, rhs in
+            Coordinate(lhs.location.coordinate).distance(to: coordinate) < Coordinate(rhs.location.coordinate).distance(to: coordinate)
+        }
+    }
+
+    private static func placeDetails(from mapItem: MKMapItem) -> PlaceDetails {
+        PlaceDetails(
+            title: mapItem.name ?? "",
+            coordinate: Coordinate(mapItem.location.coordinate),
+            category: mapItem.pointOfInterestCategory.flatMap(poiCategory(for:)),
+            address: mapItem.address?.fullAddress ?? mapItem.addressRepresentations?.fullAddress(includingRegion: true, singleLine: true),
+            phoneNumber: mapItem.phoneNumber,
+            url: mapItem.url,
+            mapItemIdentifier: mapItem.identifier?.rawValue
+        )
+    }
+
     /// Builds a stable `maps://` hand-off URL. A single anchor opens driving
     /// directions to that point; multiple anchors chain via Apple Maps'
     /// `daddr=...+to:...` multi-stop syntax (docs/CONCEPT.md §2.7).

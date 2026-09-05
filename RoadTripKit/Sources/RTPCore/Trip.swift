@@ -13,6 +13,13 @@ public final class Trip {
 
     public var currentPhaseRawValue: Int = Phase.corridor.rawValue
 
+    /// How far (as a fraction of a day's budget) a Phase-2-selected
+    /// overnight candidate may deviate from the time budget and still be
+    /// automatically promoted to that day's lodging in Phase 3
+    /// (docs/CONCEPT.md §2.6 "Overnight candidates"). Adjustable per trip;
+    /// defaults to ±20%.
+    public var overnightToleranceFraction: Double = Trip.defaultOvernightToleranceFraction
+
     /// Encoded `[Int: RevisionStamp]` keyed by `Phase.rawValue`. Stored as
     /// `Data` rather than a native SwiftData relationship/dictionary so the
     /// schema stays simple and CloudKit-compatible; see `phaseStatus` below
@@ -51,6 +58,9 @@ public final class Trip {
         get { Phase(rawValue: currentPhaseRawValue) ?? .corridor }
         set { currentPhaseRawValue = newValue.rawValue }
     }
+
+    /// Default overnight-candidate tolerance, ±20% of the day's budget.
+    public static let defaultOvernightToleranceFraction: Double = 0.2
 
     /// Per-phase revision tracking (docs/CONCEPT.md §1.6, principle P2).
     /// Editing an earlier phase should mark every later phase `needsReview`

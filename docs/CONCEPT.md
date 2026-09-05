@@ -88,6 +88,32 @@ executable day-by-day itinerary → travel journal.
   - AC: Absorption is announced ("Replaced *Nuremberg* with *Nuremberg Castle*") and undoable.
   - AC: If a POI is within 10 km of several waypoints, only the nearest one is absorbed.
   - AC: POIs are reorderable; the route recomputes.
+  - AC: A user can also tap an Apple Maps built-in point of interest directly on the map; a
+    bottom-left detail card (mirroring Apple Maps' own UI — `mapFeatureSelectionAccessory`
+    is iOS-only, so this is a custom overlay) shows its name, category, address, phone and
+    URL, resolved via a tight-radius `MKLocalSearch` lookup keyed on the tapped title (macOS
+    has no direct feature→`MKMapItem` API). From there the user adds it as a regular POI or
+    flags it as an **overnight candidate** (see Phase 3).
+
+**Overnight candidates**
+- *As a user I can mark a POI I already like as a possible place to stay the night, without
+  committing to which day it lands on.*
+  - AC: Any POI (from map-tap or search) can be flagged "Use as Overnight Candidate"; this
+    disables its dwell-duration stepper and defaults its category to Hotel.
+  - AC: A flagged POI shows a bed badge in the POI list and stays a plain `.poi` anchor
+    (dwell duration 0) until Phase 3 promotes or the user un-flags it — it does not affect
+    Phase 1/2 route order or absorption.
+  - AC: In Phase 3, if segmenting a day would otherwise stop to ask for lodging
+    (`.reachedBudget`) and an overnight-candidate anchor is reachable within **±20% of the
+    day's budget** (the trip's `overnightToleranceFraction`, adjustable 10–50% via a stepper
+    in the day planner inspector), the closest-to-budget candidate is **automatically
+    promoted** to that day's lodging and the day closes there — no manual lodging search
+    needed.
+  - AC: Auto-promotion shows an undoable banner ("*Lakeside Inn* used as tonight's stay —
+    Undo / Dismiss"). Undo reverts the anchor to a POI, reopens the day, and excludes that
+    candidate from re-matching the same day (a different candidate may then auto-promote).
+  - AC: Removing an auto-promoted lodging (not just via Undo) also reverts it to a POI
+    rather than deleting it, since the user chose it deliberately in Phase 2.
 
 **Phase 3 — Overnight stays**
 - *As a user I state how long I want to drive on day N and get a suggested area to sleep in.*
@@ -174,6 +200,7 @@ Trip
   photos: [TripPhoto]
   phaseStatus: [Phase: RevisionStamp]   // .ok / .needsReview
   currentPhase: Phase
+  overnightToleranceFraction: Double   // default 0.2 — see §2.6 "Overnight-candidate auto-promotion"
 
 Anchor
   id, order, kind (.start/.waypoint/.poi/.lodging/.destination)
@@ -181,6 +208,7 @@ Anchor
   mapItemIdentifier: String?   // MKMapItem.Identifier for reliable re-resolution
   category: POICategory?
   dwellDuration: TimeInterval  // 0 for non-POI
+  isOvernightCandidate: Bool   // flagged from Phase 2, see §2.6
   isVisited: Bool, comment: String?, rating: Int?   // Phase 4 state
 
 RouteLeg
@@ -214,9 +242,13 @@ protocol MapProvider {
         async throws -> [PlaceResult]
     func reverseGeocode(_ coordinate: Coordinate) async throws -> PlaceResult
     func directions(from: Coordinate, to: Coordinate) async throws -> RouteResult
+    func details(forFeatureTitled: String, near: Coordinate) async throws -> PlaceDetails
     func externalNavigationURL(for: [Anchor]) -> URL
 }
 ```
+
+`details(forFeatureTitled:near:)` resolves a tapped built-in Apple Maps feature (title +
+coordinate) to enriched `PlaceDetails` (address/phone/URL) — see §2.5 "Map-tap POI selection".
 
 `AppleMapsProvider` is the only v1 implementation (MKLocalSearch, MKDirections,
 `MKMapItem.openMaps(with:)`). Adding Google/OSM later means one new conformance plus a
@@ -254,6 +286,25 @@ Insertion position for a non-absorbing POI is chosen by projecting the POI onto 
 route polyline and inserting it into the leg whose projection is nearest — so the user does
 not have to reorder manually in the common case. The order remains fully user-editable.
 
+### Map-tap POI selection (macOS specifics)
+
+SwiftUI's `Map(position:selection:)` supports `MapSelection<MKMapItem>` and exposes a tapped
+built-in Apple Maps feature as a `MapFeature` (title, coordinate, category) — but on macOS:
+- `mapFeatureSelectionAccessory` (Apple's own info card) is **iOS-only** → we render a custom
+  bottom-left `MapFeatureDetailCard` overlay instead.
+- `MKMapItemRequest(mapFeatureAnnotation:)` / `MKMapItemIdentifier` are **unavailable on
+  macOS**, so there is no direct feature→`MKMapItem` resolution path. `AppleMapsProvider`
+  falls back to an `MKLocalSearch` with `resultTypes = .pointOfInterest`, a ~1 km region
+  around the tap coordinate, and `naturalLanguageQuery` set to the feature's title, then picks
+  the geographically closest result as a best-effort match.
+- `MapFeature` is not `Hashable` on macOS, so it is never retained outside the map view: a
+  plain `MapFeatureTap` (title + coordinate) is extracted immediately and the selection is
+  reset synchronously so re-tapping the same feature re-triggers the lookup.
+
+Feature-tap selection is only enabled during Phase 2 (`.pointsOfInterest`); adding a tapped
+feature calls the same `Trip.addPOI` used by the search field, optionally flagged
+`isOvernightCandidate`.
+
 ## 2.6 Phase 3 — Day segmentation algorithm
 
 ```
@@ -282,6 +333,38 @@ ship; a documented ±10 % tolerance is shown in the UI as "≈".
 Edge cases handled explicitly:
 - Budget smaller than the first leg → time-up point inside leg 1, day may contain no stop.
 - No lodging results in radius → offer radius expansion, then manual pin drop.
+
+### Overnight-candidate auto-promotion
+
+When segmentation reports `.reachedBudget` for a still-open day, `bestOvernightCandidate`
+walks the same anchor chain forward from the day's start looking for a `.poi` anchor flagged
+`isOvernightCandidate`, up to `budget * (1 + toleranceFraction)`:
+
+```
+overnightCandidates(startAnchorID, budget, toleranceFraction):
+  ceiling = budget * (1 + toleranceFraction)
+  consumed = 0 ; matches = []
+  for each leg forward from startAnchorID:
+      consumed += leg.travelTime
+      if consumed > ceiling: break
+      consumed += dwellDuration of `to` if any
+      if to.kind == .poi && to.isOvernightCandidate:
+          matches.append((to, deviation: consumed - budget))
+      if consumed > ceiling || to.kind == .destination: break
+  return matches
+
+bestOvernightCandidate = matches
+  .filter { !excluded.contains($0.anchor) && |deviation| <= budget * toleranceFraction }
+  .min(by: |deviation|)                      // closest to the budget wins ties
+```
+
+A match is promoted **in place** — `anchor.kind = .lodging`, `day.endAnchorID = anchor.id` —
+rather than removed and reinserted, so cached route legs (keyed by anchor ID pairs) stay
+valid and no re-routing is triggered. `isOvernightCandidate` is left `true` after promotion so
+`removeLodging` can tell a reverted candidate apart from a manually-searched lodging (which is
+deleted outright). Undoing a promotion adds the anchor to a per-day rejection set so
+re-segmenting doesn't immediately re-pick it, letting a second-best candidate (if any) take
+over; the rejection set is cleared when the day is reopened or a new day starts.
 - User picks a lodging *before* the time-up point → allowed, day simply ends earlier.
 - Deleting a lodging merges the day with the following one and re-runs segmentation.
 

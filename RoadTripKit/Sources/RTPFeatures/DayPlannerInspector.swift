@@ -21,6 +21,8 @@ public struct DayPlannerInspector: View {
 
     public var body: some View {
         Group {
+            toleranceSection
+
             if let day = viewModel.openDay {
                 openDaySections(day)
             } else if viewModel.canStartNextDay {
@@ -48,6 +50,30 @@ public struct DayPlannerInspector: View {
     }
 
     // MARK: - Sections
+
+    /// Adjusts how far (as a fraction of the day's budget) a Phase-2
+    /// overnight candidate may deviate from the budget and still be
+    /// automatically promoted to that day's lodging (docs/CONCEPT.md §2.6
+    /// "Overnight candidates").
+    private var toleranceSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Stepper(
+                "Overnight candidate tolerance: \u{00b1}\(Int((viewModel.trip.overnightToleranceFraction * 100).rounded()))%",
+                value: Binding(
+                    get: { viewModel.trip.overnightToleranceFraction },
+                    set: {
+                        viewModel.trip.overnightToleranceFraction = $0
+                        viewModel.refreshOvernightPromotion()
+                    }
+                ),
+                in: 0.1...0.5,
+                step: 0.05
+            )
+            Text("How far a Phase 2 overnight candidate may deviate from a day's time budget and still be used automatically.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
 
     private var startDaySection: some View {
         Group {

@@ -25,6 +25,11 @@ public final class StubMapProvider: MapProvider, @unchecked Sendable {
     /// letting tests script a lodging-search failure (e.g. offline).
     public var categorySearchShouldThrow = false
 
+    /// Scripted result for `details(forFeatureTitled:near:)`, keyed by the
+    /// tapped feature's title.
+    public var featureDetailsByTitle: [String: PlaceDetails] = [:]
+    public var featureDetailsShouldThrow = false
+
     public init() {}
 
     public static func routeKey(from: Coordinate, to: Coordinate) -> String {
@@ -75,5 +80,13 @@ public final class StubMapProvider: MapProvider, @unchecked Sendable {
 
     public func externalNavigationURL(for anchors: [Anchor]) -> URL {
         URL(string: "maps://stub")!
+    }
+
+    public func details(forFeatureTitled title: String, near coordinate: Coordinate) async throws -> PlaceDetails {
+        if featureDetailsShouldThrow {
+            throw MapProviderError.requestFailed("stubbed failure")
+        }
+        guard let details = featureDetailsByTitle[title] else { throw MapProviderError.noResults }
+        return details
     }
 }
