@@ -68,10 +68,13 @@ executable day-by-day itinerary → travel journal.
 
 **Phase 1 — Coarse route**
 - *As a user I set a start and a destination and add coarse waypoints in between.*
-  - AC: Waypoints are reorderable via drag & drop; the map polyline updates.
-  - AC: A waypoint can be added by search, by long-press on the map, or from a map POI.
+  - AC: Start and destination are set via text search fields in the right inspector (addresses, POIs, landmarks); searches are region-biased toward existing anchors.
+  - AC: Waypoint field is only active once start and destination are set; can be added via search or long-press on the map.
+  - AC: Waypoints are reorderable via drag & drop; the route auto-updates after each edit (debounced 500ms).
+  - AC: Distance and driving time update live after each change (start, destination, waypoint add/remove/reorder).
   - AC: Result is a driving route Start → W₁ … Wₙ → Destination with total distance/duration.
   - AC: Phase 1 is complete when start + destination are set and a route was computed.
+  - AC: Manual "Recalculate Route" button remains as a fallback for stale legs.
 
 **Phase 2 — Points of interest**
 - *As a user I add POIs to refine the route and say how long I want to stay.*
