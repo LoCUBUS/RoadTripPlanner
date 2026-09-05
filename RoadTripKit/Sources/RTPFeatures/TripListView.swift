@@ -32,6 +32,9 @@ public struct TripListView: View {
         .onChange(of: selection?.persistentModelID) { _, _ in
             updateWorkspace()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .newTripRequested)) { _ in
+            createTrip()
+        }
         .sheet(item: $tripPendingRename) { trip in
             RenameTripSheet(
                 name: Binding(
@@ -68,6 +71,9 @@ public struct TripListView: View {
                 TripRow(trip: trip)
                     .tag(trip)
                     .contextMenu {
+                        Button { createTrip() } label: {
+                            Label("New Trip", systemImage: "plus")
+                        }
                         Button { rename(trip) } label: {
                             Label("Rename", systemImage: "pencil")
                         }
@@ -82,9 +88,19 @@ public struct TripListView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle("Trips")
+        .contextMenu {
+            Button { createTrip() } label: {
+                Label("New Trip", systemImage: "plus")
+            }
+        }
         .overlay {
             if trips.isEmpty {
                 ContentUnavailableView("No Trips Yet", systemImage: "map", description: Text("Create a trip to get started."))
+                    .contextMenu {
+                        Button { createTrip() } label: {
+                            Label("New Trip", systemImage: "plus")
+                        }
+                    }
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -102,7 +118,6 @@ public struct TripListView: View {
                 Label("New Trip", systemImage: "plus")
             }
             .help("Create a new trip")
-            .keyboardShortcut("n", modifiers: .command)
 
             Button {
                 if let selection { duplicate(selection) }
