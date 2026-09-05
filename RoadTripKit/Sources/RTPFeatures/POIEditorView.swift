@@ -101,9 +101,6 @@ public struct POIEditorView: View {
                     .disabled(viewModel.isRecalculating || viewModel.orderedAnchors.count < 2)
                 }
             }
-            #if os(iOS)
-            .toolbar { EditButton() }
-            #endif
         }
         .navigationTitle("Points of Interest")
         .sheet(item: $pendingPoint) { point in
@@ -230,8 +227,6 @@ private struct AddPOISheet: View {
                 }
             }
         }
-        #if os(macOS)
         .frame(minWidth: 360, minHeight: 320)
-        #endif
     }
 }

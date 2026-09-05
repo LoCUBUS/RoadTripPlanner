@@ -254,9 +254,7 @@ private struct LodgingNameSheet: View {
                 }
             }
         }
-        #if os(macOS)
         .frame(minWidth: 320, minHeight: 200)
-        #endif
     }
 }
 

@@ -86,9 +86,6 @@ public struct CorridorEditorView: View {
                     .disabled(viewModel.isRecalculating || viewModel.orderedAnchors.count < 2)
                 }
             }
-            #if os(iOS)
-            .toolbar { EditButton() }
-            #endif
         }
         .navigationTitle("Corridor")
     }
