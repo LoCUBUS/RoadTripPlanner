@@ -70,11 +70,44 @@ public final class Trip {
         }
     }
 
+    /// Whether `phase` holds any data of its own that an upstream edit could
+    /// actually invalidate:
+    ///
+    /// | Phase | Has content when |
+    /// |---|---|
+    /// | `.corridor` | any anchor exists |
+    /// | `.pointsOfInterest` | any anchor is a POI |
+    /// | `.overnights` | any day exists, or any anchor is a lodging |
+    /// | `.summary` | any anchor carries visited/comment/rating state |
+    /// | `.journal` | any photo exists |
+    ///
+    /// An empty phase cannot go out of date, so flagging it for review would
+    /// only produce a banner about data that does not exist yet.
+    public func hasReviewableContent(_ phase: Phase) -> Bool {
+        switch phase {
+        case .corridor:
+            !anchors.isEmpty
+        case .pointsOfInterest:
+            anchors.contains { $0.kind == .poi }
+        case .overnights:
+            !days.isEmpty || anchors.contains { $0.kind == .lodging }
+        case .summary:
+            anchors.contains { $0.isVisited || !($0.comment ?? "").isEmpty || $0.rating != nil }
+        case .journal:
+            !photos.isEmpty
+        }
+    }
+
     /// Marks every phase strictly after `phase` as needing review, without
     /// touching any of their underlying data (principle P2).
+    ///
+    /// Phases that hold no data of their own are skipped — see
+    /// `hasReviewableContent(_:)`. Without that guard the very first edit to a
+    /// brand-new trip raises a review banner for all four later phases even
+    /// though none of them contain anything yet.
     public func markNeedsReview(after phase: Phase) {
         var status = phaseStatus
-        for later in Phase.allCases where later > phase {
+        for later in Phase.allCases where later > phase && hasReviewableContent(later) {
             status[later] = RevisionStamp(needsReview: true, lastRecalculatedAt: status[later]?.lastRecalculatedAt)
         }
         phaseStatus = status

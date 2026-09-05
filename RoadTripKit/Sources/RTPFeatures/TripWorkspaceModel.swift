@@ -43,6 +43,7 @@ public final class TripWorkspaceModel {
     public let dayPlannerViewModel: DayPlannerViewModel
     public let summaryViewModel: SummaryViewModel
     public let journalViewModel: PhotoJournalViewModel
+    public let corridorSearchModel: CorridorSearchModel
 
     /// The phase whose inspector last changed the map's content and
     /// interaction routing. Expanding any disclosure group activates it;
@@ -78,9 +79,13 @@ public final class TripWorkspaceModel {
         self.dayPlannerViewModel = DayPlannerViewModel(trip: trip, routeCoordinator: coordinator, mapProvider: mapProvider)
         self.summaryViewModel = SummaryViewModel(trip: trip, mapProvider: mapProvider)
         self.journalViewModel = PhotoJournalViewModel(trip: trip, assetResolver: photoAssetResolver)
+        self.corridorSearchModel = CorridorSearchModel(mapProvider: mapProvider)
 
         self.activePhase = trip.currentPhase
         self.expandedPhases = [trip.currentPhase]
+
+        corridorSearchModel.setSearchRegion { self.searchRegion }
+        corridorSearchModel.setTrip { trip }
     }
 
     // MARK: - Disclosure group expansion
@@ -207,8 +212,31 @@ public final class TripWorkspaceModel {
     /// Phases currently flagged as possibly out of date by an upstream edit
     /// (docs/CONCEPT.md §1.6, principle P2), sorted so earlier phases show
     /// first.
+    ///
+    /// Filtered by `hasReviewableContent` as well as the flag itself, so a
+    /// phase that was emptied *after* being flagged (e.g. its last POI was
+    /// removed) stops showing a banner about data it no longer has.
     public var reviewBanners: [Phase] {
-        trip.phaseStatus.filter { $0.value.needsReview }.keys.sorted()
+        trip.phaseStatus
+            .filter { $0.value.needsReview && trip.hasReviewableContent($0.key) }
+            .keys
+            .sorted()
+    }
+
+    /// Runs `recalculate(_:)` for every currently flagged phase, in phase
+    /// order, so the consolidated banner can be cleared with one action.
+    public func recalculateFlaggedPhases() async {
+        for phase in reviewBanners {
+            await recalculate(phase)
+        }
+    }
+
+    /// Clears every review flag without recalculating anything — the
+    /// "I know, that's fine" escape hatch. Deletes no data (principle P2).
+    public func dismissReviewBanners() {
+        for phase in reviewBanners {
+            trip.markReviewed(phase)
+        }
     }
 
     /// Recalculates the data a flagged phase depends on, then clears its

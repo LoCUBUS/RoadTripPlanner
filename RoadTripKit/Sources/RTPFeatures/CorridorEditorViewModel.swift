@@ -17,6 +17,9 @@ public final class CorridorEditorViewModel {
     public private(set) var isRecalculating = false
     public private(set) var recalculationError: String?
 
+    private var autoRecalculateTask: Task<Void, Never>?
+    private static let autoRecalculateDebounceInterval: Duration = .milliseconds(500)
+
     public init(trip: Trip, routeCoordinator: RouteCoordinator) {
         self.trip = trip
         self.routeCoordinator = routeCoordinator
@@ -43,16 +46,21 @@ public final class CorridorEditorViewModel {
     }
 
     public func setStart(title: String, coordinate: Coordinate, mapItemIdentifier: String? = nil) {
-        trip.setStart(title: title, coordinate: coordinate, mapItemIdentifier: mapItemIdentifier)
+        let anchor = trip.setStart(title: title, coordinate: coordinate, mapItemIdentifier: mapItemIdentifier)
+        Task { await routeCoordinator.invalidate(anchorID: anchor.id) }
+        scheduleAutoRecalculation()
     }
 
     public func setDestination(title: String, coordinate: Coordinate, mapItemIdentifier: String? = nil) {
-        trip.setDestination(title: title, coordinate: coordinate, mapItemIdentifier: mapItemIdentifier)
+        let anchor = trip.setDestination(title: title, coordinate: coordinate, mapItemIdentifier: mapItemIdentifier)
+        Task { await routeCoordinator.invalidate(anchorID: anchor.id) }
+        scheduleAutoRecalculation()
     }
 
     public func addWaypoint(title: String, coordinate: Coordinate, mapItemIdentifier: String? = nil) {
         let anchor = trip.addWaypoint(title: title, coordinate: coordinate, mapItemIdentifier: mapItemIdentifier)
         Task { await routeCoordinator.invalidate(anchorID: anchor.id) }
+        scheduleAutoRecalculation()
     }
 
     public func removeAnchor(_ anchor: Anchor) {
@@ -60,10 +68,12 @@ public final class CorridorEditorViewModel {
         trip.removeAnchor(id: id)
         pruneOrphanedLegs()
         Task { await routeCoordinator.invalidate(anchorID: id) }
+        scheduleAutoRecalculation()
     }
 
     public func moveMiddleAnchors(fromOffsets: IndexSet, toOffset: Int) {
         trip.reorderMiddleAnchors(fromOffsets: fromOffsets, toOffset: toOffset)
+        scheduleAutoRecalculation()
     }
 
     /// Recomputes only the legs invalidated since the last call, persisting
@@ -79,6 +89,18 @@ public final class CorridorEditorViewModel {
         }
     }
 
+    /// Schedules a debounced auto-recalculation after coordinate mutations.
+    /// Cancels any pending task and starts a new debounce timer.
+    private func scheduleAutoRecalculation() {
+        autoRecalculateTask?.cancel()
+        autoRecalculateTask = Task {
+            try? await Task.sleep(until: .now + Self.autoRecalculateDebounceInterval, clock: .continuous)
+            if !Task.isCancelled {
+                await recalculateRoute()
+            }
+        }
+    }
+
     /// Removes any cached leg whose endpoints are no longer both present in
     /// the anchor chain (e.g. after `removeAnchor`).
     private func pruneOrphanedLegs() {
@@ -86,3 +108,4 @@ public final class CorridorEditorViewModel {
         trip.legs.removeAll { !validIDs.contains($0.fromAnchorID) || !validIDs.contains($0.toAnchorID) }
     }
 }
+
