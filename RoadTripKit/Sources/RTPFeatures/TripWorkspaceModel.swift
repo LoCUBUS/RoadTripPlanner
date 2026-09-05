@@ -43,6 +43,7 @@ public final class TripWorkspaceModel {
     public let dayPlannerViewModel: DayPlannerViewModel
     public let summaryViewModel: SummaryViewModel
     public let journalViewModel: PhotoJournalViewModel
+    public let corridorSearchModel: CorridorSearchModel
 
     /// The phase whose inspector last changed the map's content and
     /// interaction routing. Expanding any disclosure group activates it;
@@ -78,9 +79,12 @@ public final class TripWorkspaceModel {
         self.dayPlannerViewModel = DayPlannerViewModel(trip: trip, routeCoordinator: coordinator, mapProvider: mapProvider)
         self.summaryViewModel = SummaryViewModel(trip: trip, mapProvider: mapProvider)
         self.journalViewModel = PhotoJournalViewModel(trip: trip, assetResolver: photoAssetResolver)
+        self.corridorSearchModel = CorridorSearchModel(mapProvider: mapProvider)
 
         self.activePhase = trip.currentPhase
         self.expandedPhases = [trip.currentPhase]
+
+        corridorSearchModel.setSearchRegion { self.searchRegion }
     }
 
     // MARK: - Disclosure group expansion

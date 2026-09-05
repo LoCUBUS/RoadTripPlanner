@@ -80,7 +80,7 @@ public struct TripWorkspaceView: View {
     private var inspectorColumn: some View {
         List {
             phaseDisclosure(.corridor, icon: "map") {
-                CorridorInspector(viewModel: workspace.corridorViewModel)
+                CorridorInspector(viewModel: workspace.corridorViewModel, corridorSearchModel: workspace.corridorSearchModel)
             }
             phaseDisclosure(.pointsOfInterest, icon: "star.circle") {
                 POIInspector(viewModel: workspace.poiViewModel)
