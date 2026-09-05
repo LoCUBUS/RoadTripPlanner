@@ -85,6 +85,7 @@ public final class TripWorkspaceModel {
         self.expandedPhases = [trip.currentPhase]
 
         corridorSearchModel.setSearchRegion { self.searchRegion }
+        corridorSearchModel.setTrip { trip }
     }
 
     // MARK: - Disclosure group expansion

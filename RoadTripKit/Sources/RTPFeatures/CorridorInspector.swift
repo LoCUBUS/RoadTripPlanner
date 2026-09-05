@@ -32,7 +32,7 @@ public struct CorridorInspector: View {
                 
                 if let start = viewModel.orderedAnchors.first(where: { $0.kind == .start }) {
                     HStack {
-                        Label(start.title, systemImage: "flag.checkered.circle.fill")
+                        Label(start.title, systemImage: "play.circle.fill")
                         Spacer()
                         Button(action: { clearStart() }) {
                             Image(systemName: "xmark.circle.fill")
@@ -79,7 +79,7 @@ public struct CorridorInspector: View {
                 
                 if let destination = viewModel.orderedAnchors.first(where: { $0.kind == .destination }) {
                     HStack {
-                        Label(destination.title, systemImage: "checkered.flag.circle.fill")
+                        Label(destination.title, systemImage: "flag.fill")
                         Spacer()
                         Button(action: { clearDestination() }) {
                             Image(systemName: "xmark.circle.fill")
@@ -124,10 +124,7 @@ public struct CorridorInspector: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 
-                let hasStartAndDestination = viewModel.orderedAnchors.contains { $0.kind == .start } &&
-                                           viewModel.orderedAnchors.contains { $0.kind == .destination }
-                
-                if hasStartAndDestination {
+                if corridorSearchModel.isWaypointInputEnabled {
                     TextField("Search waypoint location...", text: $corridorSearchModel.waypointQuery)
                         .textFieldStyle(.roundedBorder)
                         .onChange(of: corridorSearchModel.waypointQuery) { oldValue, newValue in
@@ -153,7 +150,7 @@ public struct CorridorInspector: View {
                         .padding(.vertical, 4)
                     }
                 } else {
-                    Text("Add start and destination first")
+                    Text("Set start and destination first")
                         .foregroundStyle(.secondary)
                         .font(.caption)
                         .padding(.vertical, 4)
@@ -164,7 +161,7 @@ public struct CorridorInspector: View {
                         .padding(.vertical, 4)
                     
                     ForEach(viewModel.orderedMiddleAnchors) { anchor in
-                        Label(anchor.title, systemImage: "mappin.circle.fill")
+                        Label(anchor.title, systemImage: "mappin.circle")
                             .contextMenu {
                                 Button(role: .destructive) {
                                     viewModel.removeAnchor(anchor)

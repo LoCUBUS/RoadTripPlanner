@@ -20,6 +20,7 @@ public final class CorridorSearchModel {
 
     private let mapProvider: any MapProvider
     private var searchRegionClosure: (() -> MapRegion)?
+    private var tripClosure: (() -> Trip)?
 
     public init(mapProvider: any MapProvider) {
         self.mapProvider = mapProvider
@@ -31,6 +32,20 @@ public final class CorridorSearchModel {
 
     public func setSearchRegion(_ closure: @escaping () -> MapRegion) {
         searchRegionClosure = closure
+    }
+
+    public func setTrip(_ closure: @escaping () -> Trip) {
+        tripClosure = closure
+    }
+
+    /// Returns true when both start and destination anchors exist in the trip,
+    /// enabling waypoint input. Without this constraint, users could add
+    /// waypoints before the route endpoints are defined.
+    public var isWaypointInputEnabled: Bool {
+        guard let trip = tripClosure?() else { return false }
+        let hasStart = !trip.orderedAnchors.filter { $0.kind == .start }.isEmpty
+        let hasDestination = !trip.orderedAnchors.filter { $0.kind == .destination }.isEmpty
+        return hasStart && hasDestination
     }
 
     public func updateStartQuery(_ text: String) {

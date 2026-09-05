@@ -47,9 +47,9 @@ public extension MapCanvasAnnotation.Style {
     /// SF Symbol shown on the map pin for this annotation kind.
     var systemImage: String {
         switch self {
-        case .start: "flag.checkered.circle.fill"
-        case .destination: "checkered.flag.circle.fill"
-        case .waypoint: "mappin.circle.fill"
+        case .start: "play.circle.fill"
+        case .destination: "flag.fill"
+        case .waypoint: "mappin.circle"
         case .poi: "star.circle.fill"
         case .lodging: "bed.double.circle.fill"
         case .searchResult: "magnifyingglass.circle.fill"
