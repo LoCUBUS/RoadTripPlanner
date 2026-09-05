@@ -75,7 +75,7 @@ struct TripModelTests {
         #expect(destination.kind == .destination)
     }
 
-    @Test("markNeedsReview flags only later phases and preserves nothing to delete")
+    @Test("markNeedsReview on empty trip flags nothing (hasReviewableContent filters)")
     func revisionTracking() throws {
         let context = try makeContext()
         let trip = Trip(name: "Munich to Lisbon")
@@ -83,15 +83,35 @@ struct TripModelTests {
 
         trip.markNeedsReview(after: .pointsOfInterest)
 
+        // Empty trip: no phases 2-5 have content, so nothing is flagged
         #expect(trip.phaseStatus[.corridor] == nil)
         #expect(trip.phaseStatus[.pointsOfInterest] == nil)
+        #expect(trip.phaseStatus[.overnights] == nil)
+        #expect(trip.phaseStatus[.summary] == nil)
+        #expect(trip.phaseStatus[.journal] == nil)
+    }
+
+    @Test("markNeedsReview flags phases with content, skips empty phases")
+    func revisionTrackingWithContent() throws {
+        let context = try makeContext()
+        let trip = Trip(name: "Munich to Lisbon")
+        context.insert(trip)
+
+        // Seed overnights with a day so it has content
+        let day = TripDay(index: 0, budget: 3600, startAnchorID: UUID())
+        day.trip = trip
+        trip.days.append(day)
+
+        trip.markNeedsReview(after: .pointsOfInterest)
+
+        // overnights now has content, so it should be flagged
         #expect(trip.phaseStatus[.overnights]?.needsReview == true)
-        #expect(trip.phaseStatus[.summary]?.needsReview == true)
-        #expect(trip.phaseStatus[.journal]?.needsReview == true)
+        // summary/journal are empty, so not flagged
+        #expect(trip.phaseStatus[.summary] == nil)
+        #expect(trip.phaseStatus[.journal] == nil)
 
         trip.markReviewed(.overnights)
         #expect(trip.phaseStatus[.overnights]?.needsReview == false)
-        #expect(trip.phaseStatus[.summary]?.needsReview == true)
     }
 
     @Test("A POI anchor stores dwell duration and category")

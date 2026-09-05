@@ -123,26 +123,31 @@ public struct TripWorkspaceView: View {
         }
     }
 
+    /// A single compact row rather than one banner per flagged phase: an
+    /// upstream edit typically flags several phases at once, and stacking a
+    /// full-width row with its own buttons for each of them buries the map.
     private var reviewBanner: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(workspace.reviewBanners, id: \.self) { phase in
-                HStack {
-                    Label("\(phase.displayName) may be out of date", systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
-                    Spacer()
-                    Button("Recalculate") {
-                        Task { await workspace.recalculate(phase) }
-                    }
-                    .disabled(workspace.recalculatingPhase != nil)
-                    Button("Dismiss") {
-                        workspace.trip.markReviewed(phase)
-                    }
-                    .disabled(workspace.recalculatingPhase != nil)
-                }
+        let phases = workspace.reviewBanners
+        let message = "\(phases.map(\.displayName).formatted(.list(type: .and))) may be out of date"
+
+        return HStack(spacing: 8) {
+            Label(message, systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+                .lineLimit(2)
+            Spacer(minLength: 8)
+            Button("Recalculate") {
+                Task { await workspace.recalculateFlaggedPhases() }
             }
+            .disabled(workspace.recalculatingPhase != nil)
+            Button("Dismiss") {
+                workspace.dismissReviewBanners()
+            }
+            .disabled(workspace.recalculatingPhase != nil)
         }
         .font(.footnote)
         .padding(10)
         .background(.thinMaterial)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(message)
     }
 }
