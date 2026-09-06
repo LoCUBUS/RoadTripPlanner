@@ -1,5 +1,6 @@
 import Foundation
 import RTPCore
+import RTPProviders
 
 /// A pin rendered on `MapCanvasView`, decoupled from `RTPCore.Anchor` so the
 /// map component can also render search results and provider POIs, not just
@@ -20,12 +21,35 @@ public struct MapCanvasAnnotation: Identifiable, Equatable, Sendable {
     public var coordinate: Coordinate
     public var title: String
     public var style: Style
+    /// Full details for a `.searchResult` pin, so clicking it can present
+    /// `MapPlaceDetailCard` immediately without another lookup — `nil` for
+    /// every other style, which is resolved by other means (a click on
+    /// empty map, or the persisted `Anchor` itself).
+    public var placeDetails: PlaceDetails?
 
-    public init(id: UUID = UUID(), coordinate: Coordinate, title: String, style: Style) {
+    public init(id: UUID = UUID(), coordinate: Coordinate, title: String, style: Style, placeDetails: PlaceDetails? = nil) {
         self.id = id
         self.coordinate = coordinate
         self.title = title
         self.style = style
+        self.placeDetails = placeDetails
+    }
+}
+
+public extension MapCanvasAnnotation {
+    init(result: PlaceResult) {
+        self.init(
+            id: UUID(),
+            coordinate: result.coordinate,
+            title: result.title,
+            style: .searchResult,
+            placeDetails: PlaceDetails(
+                title: result.title,
+                coordinate: result.coordinate,
+                category: result.category,
+                mapItemIdentifier: result.mapItemIdentifier
+            )
+        )
     }
 }
 

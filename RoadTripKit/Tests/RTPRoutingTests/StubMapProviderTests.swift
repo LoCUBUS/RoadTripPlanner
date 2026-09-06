@@ -58,37 +58,40 @@ struct StubMapProviderTests {
         }
     }
 
-    @Test("Feature details returns the scripted result for the tapped title")
-    func featureDetailsScripted() async throws {
+    @Test("Nearest place returns the closest scripted candidate within radius")
+    func nearestPlaceScripted() async throws {
         let provider = StubMapProvider()
-        let expected = PlaceDetails(
+        let clickPoint = Coordinate(latitude: 49.4579, longitude: 11.0775)
+        let near = PlaceDetails(
             title: "Nuremberg Castle",
-            coordinate: Coordinate(latitude: 49.4579, longitude: 11.0775),
+            coordinate: Coordinate(latitude: 49.4580, longitude: 11.0776),
             category: .sight,
             address: "Auf der Burg 13, 90403 N\u{00fc}rnberg",
             phoneNumber: "+49 911 2446590",
             url: URL(string: "https://www.kaiserburg-nuernberg.de")
         )
-        provider.featureDetailsByTitle["Nuremberg Castle"] = expected
+        let far = PlaceDetails(title: "Far Away Museum", coordinate: Coordinate(latitude: 60.0, longitude: 30.0))
+        provider.nearbyPlaces = [far, near]
 
-        let result = try await provider.details(forFeatureTitled: "Nuremberg Castle", near: expected.coordinate)
-        #expect(result == expected)
+        let result = try await provider.nearestPlace(to: clickPoint, radiusMeters: 500)
+        #expect(result == near)
     }
 
-    @Test("Feature details without a scripted result throws noResults")
-    func featureDetailsMissing() async {
+    @Test("Nearest place returns nil when nothing is within radius")
+    func nearestPlaceOutOfRange() async throws {
         let provider = StubMapProvider()
-        await #expect(throws: MapProviderError.noResults) {
-            _ = try await provider.details(forFeatureTitled: "Unknown Place", near: Coordinate())
-        }
+        provider.nearbyPlaces = [PlaceDetails(title: "Far Away Museum", coordinate: Coordinate(latitude: 60.0, longitude: 30.0))]
+
+        let result = try await provider.nearestPlace(to: Coordinate(), radiusMeters: 500)
+        #expect(result == nil)
     }
 
-    @Test("Feature details can be scripted to throw, e.g. to simulate being offline")
-    func featureDetailsScriptedFailure() async {
+    @Test("Nearest place can be scripted to throw, e.g. to simulate being offline")
+    func nearestPlaceScriptedFailure() async {
         let provider = StubMapProvider()
-        provider.featureDetailsShouldThrow = true
+        provider.nearestPlaceShouldThrow = true
         await #expect(throws: MapProviderError.requestFailed("stubbed failure")) {
-            _ = try await provider.details(forFeatureTitled: "Anything", near: Coordinate())
+            _ = try await provider.nearestPlace(to: Coordinate(), radiusMeters: 500)
         }
     }
 }

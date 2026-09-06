@@ -75,28 +75,10 @@ public struct TripWorkspaceView: View {
                 routePolylines: workspace.routePolylines,
                 searchRegion: workspace.searchRegion,
                 mapProvider: workspace.mapProvider,
-                featureSelectionEnabled: workspace.activePhase == .pointsOfInterest,
+                placeSelectionEnabled: workspace.isPlaceSelectionEnabled,
                 onLongPress: workspace.handleLongPress,
-                onAddFeatureAsPOI: { details in
-                    workspace.poiViewModel.addPOI(
-                        title: details.title,
-                        coordinate: details.coordinate,
-                        mapItemIdentifier: details.mapItemIdentifier,
-                        category: details.category,
-                        dwellDuration: 45 * 60,
-                        isOvernightCandidate: false
-                    )
-                },
-                onAddFeatureAsOvernight: { details in
-                    workspace.poiViewModel.addPOI(
-                        title: details.title,
-                        coordinate: details.coordinate,
-                        mapItemIdentifier: details.mapItemIdentifier,
-                        category: details.category?.isLodging == true ? details.category : .hotel,
-                        dwellDuration: 0,
-                        isOvernightCandidate: true
-                    )
-                }
+                placeActions: { workspace.placeActions() },
+                placeFootnote: { workspace.placeFootnote() }
             )
         }
     }

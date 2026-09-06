@@ -205,9 +205,16 @@ struct AddPOISheet: View {
     let onAdd: (POICategory?, Int, Bool) -> Void
     let onCancel: () -> Void
 
-    @State private var category: POICategory = .sight
+    @State private var category: POICategory
     @State private var dwellMinutes: Int = 45
     @State private var useAsOvernight = false
+
+    init(point: PendingMapPoint, onAdd: @escaping (POICategory?, Int, Bool) -> Void, onCancel: @escaping () -> Void) {
+        self.point = point
+        self.onAdd = onAdd
+        self.onCancel = onCancel
+        _category = State(initialValue: point.category ?? .sight)
+    }
 
     var body: some View {
         NavigationStack {

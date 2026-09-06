@@ -13,11 +13,16 @@ public struct PendingMapPoint: Identifiable, Equatable, Sendable {
     public let title: String
     public let coordinate: Coordinate
     public let mapItemIdentifier: String?
+    /// The resolved place's category, if any — prefills `AddPOISheet`'s
+    /// category picker when this point came from a map click/search result
+    /// rather than a long-press (which has no category to suggest).
+    public let category: POICategory?
 
-    public init(title: String, coordinate: Coordinate, mapItemIdentifier: String? = nil) {
+    public init(title: String, coordinate: Coordinate, mapItemIdentifier: String? = nil, category: POICategory? = nil) {
         self.title = title
         self.coordinate = coordinate
         self.mapItemIdentifier = mapItemIdentifier
+        self.category = category
     }
 }
 
@@ -117,9 +122,9 @@ public final class TripWorkspaceModel {
     public var mapAnnotations: [MapCanvasAnnotation] {
         switch activePhase {
         case .corridor:
-            corridorViewModel.orderedAnchors.map(MapCanvasAnnotation.init(anchor:))
+            corridorViewModel.orderedAnchors.map(MapCanvasAnnotation.init(anchor:)) + corridorSearchResultAnnotations
         case .pointsOfInterest:
-            poiViewModel.orderedAnchors.map(MapCanvasAnnotation.init(anchor:))
+            poiViewModel.orderedAnchors.map(MapCanvasAnnotation.init(anchor:)) + poiSearchModel.search.results.map(MapCanvasAnnotation.init(result:))
         case .overnights:
             overnightsAnnotations
         case .summary:
@@ -129,11 +134,23 @@ public final class TripWorkspaceModel {
         }
     }
 
+    /// Pins for whichever of the three corridor search fields (start,
+    /// destination, waypoint) currently has results — a user only searches
+    /// one field at a time in practice, but nothing prevents more than one
+    /// from being non-empty.
+    private var corridorSearchResultAnnotations: [MapCanvasAnnotation] {
+        (corridorSearchModel.startSearch.results
+            + corridorSearchModel.destinationSearch.results
+            + corridorSearchModel.waypointSearch.results
+        ).map(MapCanvasAnnotation.init(result:))
+    }
+
     private var overnightsAnnotations: [MapCanvasAnnotation] {
         var annotations = trip.orderedAnchors.map(MapCanvasAnnotation.init(anchor:))
         if let day = dayPlannerViewModel.openDay, let timeUpPoint = day.timeUpPoint {
             annotations.append(MapCanvasAnnotation(coordinate: timeUpPoint, title: "Time's Up \u{2248}", style: .timeUp))
         }
+        annotations.append(contentsOf: dayPlannerViewModel.lodgingResults.map(MapCanvasAnnotation.init(result:)))
         return annotations
     }
 
@@ -208,6 +225,131 @@ public final class TripWorkspaceModel {
         } else {
             corridorViewModel.addWaypoint(title: title, coordinate: coordinate, mapItemIdentifier: mapItemIdentifier)
         }
+    }
+
+    // MARK: - Map click → place detail card
+
+    /// Whether `MapCanvasView` should resolve a click into a place at all.
+    /// True for every phase except Journal, where (like long-press today) a
+    /// click should only do something while a photo is armed for pinning —
+    /// otherwise it would open a card with no relevant action.
+    public var isPlaceSelectionEnabled: Bool {
+        activePhase != .journal || photoAwaitingPin != nil
+    }
+
+    /// The action buttons `MapPlaceDetailCard` should offer for a resolved
+    /// place, depending on the active phase (docs/CONCEPT.md §2.5
+    /// "Selecting a map place").
+    public func placeActions() -> [MapPlaceAction] {
+        switch activePhase {
+        case .corridor:
+            corridorPlaceActions()
+        case .pointsOfInterest:
+            poiPlaceActions()
+        case .overnights:
+            overnightPlaceActions()
+        case .summary:
+            []
+        case .journal:
+            journalPlaceActions()
+        }
+    }
+
+    /// A short explanation shown under the card's actions when the default
+    /// action isn't the obviously-expected one (e.g. no day is open yet).
+    public func placeFootnote() -> String? {
+        switch activePhase {
+        case .overnights where dayPlannerViewModel.openDay == nil:
+            "No day is open yet — added as an overnight candidate for Phase 3 to use later."
+        case .summary:
+            "Summary is read-only."
+        default:
+            nil
+        }
+    }
+
+    /// Mirrors `handleCorridorPoint`'s "next empty slot" rule, but as an
+    /// explicit, single button so a map click always shows what it's about
+    /// to do before doing it.
+    private func corridorPlaceActions() -> [MapPlaceAction] {
+        if corridorViewModel.orderedAnchors.first(where: { $0.kind == .start }) == nil {
+            return [MapPlaceAction(title: "Set as Start", systemImage: "play.circle.fill") { [weak self] details in
+                self?.corridorViewModel.setStart(title: details.title, coordinate: details.coordinate, mapItemIdentifier: details.mapItemIdentifier)
+            }]
+        } else if corridorViewModel.orderedAnchors.first(where: { $0.kind == .destination }) == nil {
+            return [MapPlaceAction(title: "Set as Destination", systemImage: "flag.fill") { [weak self] details in
+                self?.corridorViewModel.setDestination(title: details.title, coordinate: details.coordinate, mapItemIdentifier: details.mapItemIdentifier)
+            }]
+        } else {
+            return [MapPlaceAction(title: "Add as Waypoint", systemImage: "mappin.circle") { [weak self] details in
+                self?.corridorViewModel.addWaypoint(title: details.title, coordinate: details.coordinate, mapItemIdentifier: details.mapItemIdentifier)
+            }]
+        }
+    }
+
+    /// "Add as POI…" opens the same category/dwell-duration sheet a
+    /// long-press does, prefilled with the resolved place's category;
+    /// "Add as Overnight Candidate" adds it directly, mirroring the sheet's
+    /// own toggle.
+    private func poiPlaceActions() -> [MapPlaceAction] {
+        [
+            MapPlaceAction(title: "Add as POI\u{2026}", systemImage: "star.circle") { [weak self] details in
+                self?.pendingPOIPoint = PendingMapPoint(
+                    title: details.title,
+                    coordinate: details.coordinate,
+                    mapItemIdentifier: details.mapItemIdentifier,
+                    category: details.category
+                )
+            },
+            MapPlaceAction(title: "Add as Overnight Candidate", systemImage: "bed.double") { [weak self] details in
+                self?.poiViewModel.addPOI(
+                    title: details.title,
+                    coordinate: details.coordinate,
+                    mapItemIdentifier: details.mapItemIdentifier,
+                    category: details.category?.isLodging == true ? details.category : .hotel,
+                    dwellDuration: 0,
+                    isOvernightCandidate: true
+                )
+            }
+        ]
+    }
+
+    /// When a day is open, closes it with the resolved place as tonight's
+    /// lodging — the same path a lodging search-result pick uses. When no
+    /// day is open yet, falls back to adding it as an overnight candidate
+    /// (see `placeFootnote()`).
+    private func overnightPlaceActions() -> [MapPlaceAction] {
+        if let day = dayPlannerViewModel.openDay, let afterAnchorID = dayPlannerViewModel.lodgingInsertionAnchorID(for: day) {
+            return [MapPlaceAction(title: "Use as Tonight's Overnight", systemImage: "bed.double.fill") { [weak self] details in
+                self?.dayPlannerViewModel.closeDay(
+                    day,
+                    afterAnchorID: afterAnchorID,
+                    title: details.title,
+                    coordinate: details.coordinate,
+                    mapItemIdentifier: details.mapItemIdentifier,
+                    category: details.category?.isLodging == true ? details.category : .hotel
+                )
+            }]
+        }
+        return [MapPlaceAction(title: "Add as Overnight Candidate", systemImage: "bed.double") { [weak self] details in
+            self?.poiViewModel.addPOI(
+                title: details.title,
+                coordinate: details.coordinate,
+                mapItemIdentifier: details.mapItemIdentifier,
+                category: details.category?.isLodging == true ? details.category : .hotel,
+                dwellDuration: 0,
+                isOvernightCandidate: true
+            )
+        }]
+    }
+
+    private func journalPlaceActions() -> [MapPlaceAction] {
+        guard photoAwaitingPin != nil else { return [] }
+        return [MapPlaceAction(title: "Pin Photo Here", systemImage: "mappin.and.ellipse") { [weak self] details in
+            guard let self, let photo = self.photoAwaitingPin else { return }
+            self.journalViewModel.pinPhoto(photo, at: details.coordinate)
+            self.photoAwaitingPin = nil
+        }]
     }
 
     // MARK: - Phase revision banner

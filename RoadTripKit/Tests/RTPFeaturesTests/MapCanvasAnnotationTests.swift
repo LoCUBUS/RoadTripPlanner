@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import RTPCore
+import RTPProviders
 @testable import RTPFeatures
 
 @Suite("MapCanvasAnnotation")
@@ -38,5 +39,26 @@ struct MapCanvasAnnotationTests {
         let descriptions = styles.map(\.accessibilityDescription)
         #expect(descriptions.allSatisfy { !$0.isEmpty })
         #expect(Set(descriptions).count == descriptions.count)
+    }
+
+    @Test("A search result becomes a .searchResult pin carrying its full details")
+    func searchResultBecomesAnnotationWithDetails() {
+        let result = PlaceResult(
+            id: "1",
+            title: "Nuremberg Castle",
+            subtitle: "Nuremberg",
+            coordinate: Coordinate(latitude: 49.4579, longitude: 11.0775),
+            category: .sight,
+            mapItemIdentifier: "abc"
+        )
+
+        let annotation = MapCanvasAnnotation(result: result)
+
+        #expect(annotation.style == .searchResult)
+        #expect(annotation.title == "Nuremberg Castle")
+        #expect(annotation.coordinate == result.coordinate)
+        #expect(annotation.placeDetails?.title == "Nuremberg Castle")
+        #expect(annotation.placeDetails?.category == .sight)
+        #expect(annotation.placeDetails?.mapItemIdentifier == "abc")
     }
 }
