@@ -25,10 +25,10 @@ public final class StubMapProvider: MapProvider, @unchecked Sendable {
     /// letting tests script a lodging-search failure (e.g. offline).
     public var categorySearchShouldThrow = false
 
-    /// Scripted result for `details(forFeatureTitled:near:)`, keyed by the
-    /// tapped feature's title.
-    public var featureDetailsByTitle: [String: PlaceDetails] = [:]
-    public var featureDetailsShouldThrow = false
+    /// Scripted candidates for `nearestPlace(to:radiusMeters:)` — the
+    /// geographically closest one within range is returned.
+    public var nearbyPlaces: [PlaceDetails] = []
+    public var nearestPlaceShouldThrow = false
 
     public init() {}
 
@@ -82,11 +82,12 @@ public final class StubMapProvider: MapProvider, @unchecked Sendable {
         URL(string: "maps://stub")!
     }
 
-    public func details(forFeatureTitled title: String, near coordinate: Coordinate) async throws -> PlaceDetails {
-        if featureDetailsShouldThrow {
+    public func nearestPlace(to coordinate: Coordinate, radiusMeters: Double) async throws -> PlaceDetails? {
+        if nearestPlaceShouldThrow {
             throw MapProviderError.requestFailed("stubbed failure")
         }
-        guard let details = featureDetailsByTitle[title] else { throw MapProviderError.noResults }
-        return details
+        return nearbyPlaces
+            .filter { coordinate.distance(to: $0.coordinate) <= radiusMeters }
+            .min { coordinate.distance(to: $0.coordinate) < coordinate.distance(to: $1.coordinate) }
     }
 }

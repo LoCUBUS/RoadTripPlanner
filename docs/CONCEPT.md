@@ -69,8 +69,8 @@ executable day-by-day itinerary → travel journal.
 
 **Phase 1 — Coarse route**
 - *As a user I set a start and a destination and add coarse waypoints in between.*
-  - AC: Start and destination are set via text search fields in the right inspector (addresses, POIs, landmarks); searches are region-biased toward existing anchors.
-  - AC: Waypoint field is only active once start and destination are set; can be added via search or long-press on the map.
+  - AC: Start and destination are set via text search fields in the right inspector (addresses, POIs, landmarks); searches are region-biased toward existing anchors. Clicking a place on the map offers the same action via a detail card ("Set as Start" → "Set as Destination" → "Add as Waypoint", in that order, mirroring which slot is next empty); long-pressing drops a plain pin at that slot without a lookup.
+  - AC: Waypoint field is only active once start and destination are set; can be added via search, map click (see above), or long-press on the map.
   - AC: New waypoints are automatically re-sorted into a geometrically efficient visiting order (nearest-neighbour + 2-opt, exhaustive below 9 stops) as long as the middle section is still pure waypoints; an explicit "Optimize Order" button re-runs this on demand. Once a POI or lodging anchor exists in the middle section, a new waypoint is instead inserted at the position its coordinate projects closest to, so later-phase refinements are never silently undone.
   - AC: Waypoints are reorderable via drag & drop; a manual reorder is never auto-re-sorted afterwards. The route auto-updates after each edit (debounced 500ms).
   - AC: Distance and driving time update live after each change (start, destination, waypoint add/remove/reorder).
@@ -88,12 +88,12 @@ executable day-by-day itinerary → travel journal.
   - AC: Absorption is announced ("Replaced *Nuremberg* with *Nuremberg Castle*") and undoable.
   - AC: If a POI is within 10 km of several waypoints, only the nearest one is absorbed.
   - AC: POIs are reorderable; the route recomputes.
-  - AC: A user can also tap an Apple Maps built-in point of interest directly on the map; a
-    bottom-left detail card (mirroring Apple Maps' own UI — `mapFeatureSelectionAccessory`
-    is iOS-only, so this is a custom overlay) shows its name, category, address, phone and
-    URL, resolved via a tight-radius `MKLocalSearch` lookup keyed on the tapped title (macOS
-    has no direct feature→`MKMapItem` API). From there the user adds it as a regular POI or
-    flags it as an **overnight candidate** (see Phase 3).
+  - AC: A user can also click anywhere on the map to select the nearest real place (built-in
+    Apple Maps POI icons themselves are not individually resolvable on macOS — see §2.5
+    "Selecting a map place"); a bottom-left detail card shows its name, category, address,
+    phone and URL, then offers "Add as POI…" (opening a category/dwell-duration sheet
+    prefilled with the resolved category) or "Add as Overnight Candidate". Search results are
+    also rendered as clickable map pins for the same card.
 
 **Overnight candidates**
 - *As a user I can mark a POI I already like as a possible place to stay the night, without
@@ -122,7 +122,10 @@ executable day-by-day itinerary → travel journal.
   - AC: The app marks the point on the route where the budget is exhausted.
   - AC: A lodging filter (hotel / motel / campground / RV park) can be toggled on the map,
     searching around that point (default radius 15 km, adjustable 5–50 km).
-  - AC: Choosing a lodging closes the day; the next day starts at that lodging.
+  - AC: Choosing a lodging closes the day; the next day starts at that lodging. Clicking a
+    hotel/lodging directly on the map (or one of its search-result pins) offers the same
+    "Use as Tonight's Overnight" action when a day is open; with no day open yet it falls
+    back to "Add as Overnight Candidate" for Phase 3 to use once a day is started.
   - AC: If a POI's dwell time alone exceeds the remaining budget, the app offers to
     (a) overshoot the budget, (b) end the day before that POI, or (c) shorten the dwell time.
   - AC: The last day ends at the destination; no lodging is requested there (opt-in if desired).
@@ -242,13 +245,14 @@ protocol MapProvider {
         async throws -> [PlaceResult]
     func reverseGeocode(_ coordinate: Coordinate) async throws -> PlaceResult
     func directions(from: Coordinate, to: Coordinate) async throws -> RouteResult
-    func details(forFeatureTitled: String, near: Coordinate) async throws -> PlaceDetails
+    func nearestPlace(to: Coordinate, radiusMeters: CLLocationDistance) async throws -> PlaceDetails?
     func externalNavigationURL(for: [Anchor]) -> URL
 }
 ```
 
-`details(forFeatureTitled:near:)` resolves a tapped built-in Apple Maps feature (title +
-coordinate) to enriched `PlaceDetails` (address/phone/URL) — see §2.5 "Map-tap POI selection".
+`nearestPlace(to:radiusMeters:)` resolves a raw map click (a bare coordinate) to the nearest
+real place within `radiusMeters`, returning enriched `PlaceDetails` (address/phone/URL) or
+`nil` if nothing is nearby — see §2.5 "Selecting a map place".
 
 `AppleMapsProvider` is the only v1 implementation (MKLocalSearch, MKDirections,
 `MKMapItem.openMaps(with:)`). Adding Google/OSM later means one new conformance plus a
@@ -286,24 +290,43 @@ Insertion position for a non-absorbing POI is chosen by projecting the POI onto 
 route polyline and inserting it into the leg whose projection is nearest — so the user does
 not have to reorder manually in the common case. The order remains fully user-editable.
 
-### Map-tap POI selection (macOS specifics)
+### Selecting a map place (macOS specifics)
 
-SwiftUI's `Map(position:selection:)` supports `MapSelection<MKMapItem>` and exposes a tapped
-built-in Apple Maps feature as a `MapFeature` (title, coordinate, category) — but on macOS:
-- `mapFeatureSelectionAccessory` (Apple's own info card) is **iOS-only** → we render a custom
-  bottom-left `MapFeatureDetailCard` overlay instead.
-- `MKMapItemRequest(mapFeatureAnnotation:)` / `MKMapItemIdentifier` are **unavailable on
-  macOS**, so there is no direct feature→`MKMapItem` resolution path. `AppleMapsProvider`
-  falls back to an `MKLocalSearch` with `resultTypes = .pointOfInterest`, a ~1 km region
-  around the tap coordinate, and `naturalLanguageQuery` set to the feature's title, then picks
-  the geographically closest result as a best-effort match.
-- `MapFeature` is not `Hashable` on macOS, so it is never retained outside the map view: a
-  plain `MapFeatureTap` (title + coordinate) is extracted immediately and the selection is
-  reset synchronously so re-tapping the same feature re-triggers the lookup.
+SwiftUI's `Map(position:selection:)` on macOS only supports the tag-based
+`selection: Binding<SelectedValue: Hashable>` overload: the `MapFeature`-based overload,
+`mapFeatureSelectionDisabled`, `mapFeatureSelectionContent`, and
+`mapFeatureSelectionAccessory` are all `@available(macOS, unavailable)`, `MKMapFeatureAnnotation`
+does not exist in macOS MapKit, and `MKMapItemRequest(mapFeatureAnnotation:)` is
+`API_UNAVAILABLE(macos)`. In other words: **there is no way to resolve which built-in Apple
+Maps POI icon was tapped on macOS**, whether through SwiftUI's `Map` or a bridged
+`MKMapView` — this isn't a gap in our code, it's absent from the platform.
 
-Feature-tap selection is only enabled during Phase 2 (`.pointsOfInterest`); adding a tapped
-feature calls the same `Trip.addPOI` used by the search field, optionally flagged
-`isOvernightCandidate`.
+Instead, clicking anywhere on the map resolves a **real place near the click**, independent of
+whether the click landed on a built-in POI glyph:
+- A `DragGesture(minimumDistance: 0)` attached via plain `.gesture()` (not
+  `.simultaneousGesture()`) captures the click coordinate. Using the non-simultaneous form lets
+  SwiftUI's default gesture precedence (deepest/most-nested view wins) give an annotation's own
+  `Button` first refusal, so clicking a pin never also opens a redundant place-detail card for
+  the click underneath it.
+- `AppleMapsProvider.nearestPlace(to:radiusMeters:)` runs an `MKLocalPointsOfInterestRequest`
+  centered on the click and returns the closest match within a zoom-scaled radius
+  (`min(5_000, max(150, latitudeDelta * 111_000 * 0.06))`, tracked via
+  `onMapCameraChange(frequency: .onEnd)`).
+- If nothing is nearby, the coordinate is reverse-geocoded to a plain address instead; if that
+  also fails, the card still shows a bare-coordinate placeholder so "Add..." always works
+  (`MapPlaceDetailModel.resolvedDetails(for:)`).
+- Search and lodging results are rendered as their own clickable `.searchResult` pins
+  (`MapCanvasAnnotation(result:)`), so results the user already searched for don't need a
+  second nearest-place lookup — clicking one calls `MapPlaceDetailModel.present(_:)` with the
+  already-known details.
+
+A single phase-aware `MapPlaceDetailCard` (not the platform's info card, which is unavailable
+on macOS) offers context-appropriate actions per `TripWorkspaceModel.placeActions()`: set as
+start/destination/waypoint in Corridor; add as POI (opening a prefilled category sheet) or as
+an overnight candidate in Points of Interest; close the open day with the place as tonight's
+lodging in Overnights, falling back to "Add as Overnight Candidate" when no day is open yet.
+Selection is disabled in Journal unless a photo is armed for pinning, preserving the existing
+long-press-only photo-pinning flow there.
 
 ## 2.6 Phase 3 — Day segmentation algorithm
 

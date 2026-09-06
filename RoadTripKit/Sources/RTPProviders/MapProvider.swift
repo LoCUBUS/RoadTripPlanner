@@ -122,9 +122,11 @@ public protocol MapProvider: Sendable {
     func reverseGeocode(_ coordinate: Coordinate) async throws -> PlaceResult
     func directions(from: Coordinate, to: Coordinate) async throws -> RouteResult
     func externalNavigationURL(for anchors: [Anchor]) -> URL
-    /// Resolves a tapped built-in map feature (identified only by its title
-    /// and approximate coordinate — macOS exposes no direct feature→map-item
-    /// API, see docs/CONCEPT.md §2.9 risks) into richer place info by
-    /// searching near that point and matching the closest result.
-    func details(forFeatureTitled title: String, near coordinate: Coordinate) async throws -> PlaceDetails
+    /// Resolves a map click into the nearest real place, since macOS exposes
+    /// no direct "which built-in POI icon was tapped" API — SwiftUI's
+    /// `MapFeature` selection is unavailable on macOS entirely (see
+    /// docs/CONCEPT.md §2.9 risks). Searches points of interest within
+    /// `radiusMeters` of `coordinate` and returns the geographically closest
+    /// one, or `nil` if none are found within range.
+    func nearestPlace(to coordinate: Coordinate, radiusMeters: Double) async throws -> PlaceDetails?
 }

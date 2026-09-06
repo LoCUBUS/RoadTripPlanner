@@ -103,28 +103,22 @@ public final class AppleMapsProvider: MapProvider, @unchecked Sendable {
         }
     }
 
-    /// Resolves a tapped built-in map feature into richer place info by
-    /// running an `MKLocalSearch` for `title` in a tight region around
-    /// `coordinate` and matching the closest result — macOS exposes no
-    /// direct feature→map-item API (`MKMapItemRequest`/`MKMapItemIdentifier`
-    /// are unavailable on macOS; see docs/CONCEPT.md §2.9 risks).
-    public func details(forFeatureTitled title: String, near coordinate: Coordinate) async throws -> PlaceDetails {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = title
-        request.resultTypes = .pointOfInterest
-        request.region = MKCoordinateRegion(
-            center: coordinate.clLocationCoordinate2D,
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-        )
+    /// Resolves a map click into the nearest real place by running an
+    /// `MKLocalPointsOfInterestRequest` around `coordinate` and picking the
+    /// geographically closest result — macOS exposes no direct
+    /// feature→map-item API (`MKMapItemRequest`/`MKMapItemIdentifier` are
+    /// unavailable on macOS; see docs/CONCEPT.md §2.9 risks), so a tapped
+    /// built-in POI icon cannot be resolved directly and this heuristic
+    /// stands in for it.
+    public func nearestPlace(to coordinate: Coordinate, radiusMeters: Double) async throws -> PlaceDetails? {
+        let request = MKLocalPointsOfInterestRequest(center: coordinate.clLocationCoordinate2D, radius: radiusMeters)
         let search = MKLocalSearch(request: request)
         do {
             let response = try await search.start()
             guard let match = Self.closestMapItem(to: coordinate, in: response.mapItems) else {
-                throw MapProviderError.noResults
+                return nil
             }
             return Self.placeDetails(from: match)
-        } catch let error as MapProviderError {
-            throw error
         } catch {
             throw MapProviderError.requestFailed(error.localizedDescription)
         }
